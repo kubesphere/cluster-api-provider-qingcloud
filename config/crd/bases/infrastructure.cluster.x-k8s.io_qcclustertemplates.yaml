@@ -1,0 +1,137 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: qcclustertemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: QCClusterTemplate
+    listKind: QCClusterTemplateList
+    plural: qcclustertemplates
+    shortNames:
+    - qcct
+    singular: qcclustertemplate
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: QCClusterTemplate is the Schema for the qcclustertemplates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: QCClusterTemplateSpec defines the desired state of DOClusterTemplate.
+            properties:
+              template:
+                description: QCClusterTemplateResource contains spec for DOClusterSpec.
+                properties:
+                  spec:
+                    description: QCClusterSpec defines the desired state of QCCluster
+                    properties:
+                      controlPlaneEndpoint:
+                        description: ControlPlaneEndpoint represents the endpoint
+                          used to communicate with the control plane. If ControlPlaneDNS
+                          is unset, the QC load-balancer IP of the Kubernetes API
+                          Server is used.
+                        properties:
+                          host:
+                            description: The hostname on which the API server is serving.
+                            type: string
+                          port:
+                            description: The port on which the API server is serving.
+                            format: int32
+                            type: integer
+                        required:
+                        - host
+                        - port
+                        type: object
+                      network:
+                        description: NetworkSpec encapsulates all things related to
+                          GCP network.
+                        properties:
+                          apiServerLoadbalancer:
+                            description: Configures an API Server loadbalancers
+                            properties:
+                              resourceID:
+                                description: The QingCloud load balancer ID. If omitted,
+                                  a new load balancer will be created.
+                                type: string
+                            type: object
+                          eip:
+                            description: EIP configuration.
+                            properties:
+                              bandwidth:
+                                description: Bandwidth defines the EIP bandwidth to
+                                  use. default(10M/s).
+                                type: integer
+                              billingMode:
+                                description: BillingMode defines the EIP BillingMode
+                                  to use. [bandwidth / traffic] default("traffic").
+                                type: string
+                              resourceID:
+                                description: ResourceID defines the EIP ID to use.
+                                  If omitted, a new EIP will be created.
+                                type: string
+                            type: object
+                          vpc:
+                            description: VPC defines the VPC configuration.
+                            properties:
+                              resourceID:
+                                description: ResourceID defines the Router ID to use.
+                                  If omitted, a new VPC router will be created.
+                                type: string
+                            type: object
+                          vxnets:
+                            description: VxNets configuration.
+                            items:
+                              properties:
+                                ipNetwork:
+                                  type: string
+                                resourceID:
+                                  description: ResourceID defines the VxNet ID to
+                                    use. If omitted, a new VxNet will be created.
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                      zone:
+                        description: The QingCloud Region the cluster lives in.
+                        type: string
+                    required:
+                    - zone
+                    type: object
+                required:
+                - spec
+                type: object
+            required:
+            - template
+            type: object
+          status:
+            description: QCClusterTemplateStatus defines the observed state of QCClusterTemplate
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

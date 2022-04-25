@@ -1,0 +1,945 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    control-plane: controller-manager
+  name: capqc-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    cluster.x-k8s.io/v1beta1: v1beta1
+  name: qcclusters.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: QCCluster
+    listKind: QCClusterList
+    plural: qcclusters
+    singular: qccluster
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Cluster to which this QCCluster belongs
+      jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
+      name: Cluster
+      type: string
+    - description: Cluster infrastructure is ready for QingCloud instances
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: API Endpoint
+      jsonPath: .spec.ControlPlaneEndpoint
+      name: Endpoint
+      priority: 1
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: QCCluster is the Schema for the qcclusters API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: QCClusterSpec defines the desired state of QCCluster
+            properties:
+              controlPlaneEndpoint:
+                description: ControlPlaneEndpoint represents the endpoint used to communicate with the control plane. If ControlPlaneDNS is unset, the QC load-balancer IP of the Kubernetes API Server is used.
+                properties:
+                  host:
+                    description: The hostname on which the API server is serving.
+                    type: string
+                  port:
+                    description: The port on which the API server is serving.
+                    format: int32
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
+              network:
+                description: NetworkSpec encapsulates all things related to GCP network.
+                properties:
+                  apiServerLoadbalancer:
+                    description: Configures an API Server loadbalancers
+                    properties:
+                      resourceID:
+                        description: The QingCloud load balancer ID. If omitted, a new load balancer will be created.
+                        type: string
+                    type: object
+                  eip:
+                    description: EIP configuration.
+                    properties:
+                      bandwidth:
+                        description: Bandwidth defines the EIP bandwidth to use. default(10M/s).
+                        type: integer
+                      billingMode:
+                        description: BillingMode defines the EIP BillingMode to use. [bandwidth / traffic] default("traffic").
+                        type: string
+                      resourceID:
+                        description: ResourceID defines the EIP ID to use. If omitted, a new EIP will be created.
+                        type: string
+                    type: object
+                  vpc:
+                    description: VPC defines the VPC configuration.
+                    properties:
+                      resourceID:
+                        description: ResourceID defines the Router ID to use. If omitted, a new VPC router will be created.
+                        type: string
+                    type: object
+                  vxnets:
+                    description: VxNets configuration.
+                    items:
+                      properties:
+                        ipNetwork:
+                          type: string
+                        resourceID:
+                          description: ResourceID defines the VxNet ID to use. If omitted, a new VxNet will be created.
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              zone:
+                description: The QingCloud Region the cluster lives in.
+                type: string
+            required:
+            - zone
+            type: object
+          status:
+            description: QCClusterStatus defines the observed state of QCCluster
+            properties:
+              network:
+                description: Network encapsulates all things related to DigitalOcean network.
+                properties:
+                  APIServerLoadbalancersListenerRef:
+                    description: APIServerLoadbalancersListener is the id of apiserver loadbalancers listener.
+                    properties:
+                      resourceId:
+                        description: ID of QingCloud resource
+                        type: string
+                      resourceStatus:
+                        description: Status of QingCloud resource
+                        type: string
+                    type: object
+                  apiServerLoadbalancersRef:
+                    description: APIServerLoadbalancersRef is the id of apiserver loadbalancers.
+                    properties:
+                      resourceId:
+                        description: ID of QingCloud resource
+                        type: string
+                      resourceStatus:
+                        description: Status of QingCloud resource
+                        type: string
+                    type: object
+                  eipRef:
+                    description: EIPRef is the id of eip.
+                    properties:
+                      resourceId:
+                        description: ID of QingCloud resource
+                        type: string
+                      resourceStatus:
+                        description: Status of QingCloud resource
+                        type: string
+                    type: object
+                  routerRef:
+                    description: RouterRef is the id of router.
+                    properties:
+                      resourceId:
+                        description: ID of QingCloud resource
+                        type: string
+                      resourceStatus:
+                        description: Status of QingCloud resource
+                        type: string
+                    type: object
+                  securityGroupRef:
+                    description: SecurityGroupRefRef is the id of SecurityGroup.
+                    properties:
+                      resourceId:
+                        description: ID of QingCloud resource
+                        type: string
+                      resourceStatus:
+                        description: Status of QingCloud resource
+                        type: string
+                    type: object
+                  vxnetsRef:
+                    description: VxNetRef is the id of VxNet.
+                    items:
+                      properties:
+                        ipNetwork:
+                          type: string
+                        resourceRef:
+                          description: QCResourceReference is a reference to a QingCloud resource.
+                          properties:
+                            resourceId:
+                              description: ID of QingCloud resource
+                              type: string
+                            resourceStatus:
+                              description: Status of QingCloud resource
+                              type: string
+                          type: object
+                      type: object
+                    type: array
+                type: object
+              ready:
+                description: Ready denotes that the cluster (infrastructure) is ready.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    cluster.x-k8s.io/v1beta1: v1beta1
+  name: qcclustertemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: QCClusterTemplate
+    listKind: QCClusterTemplateList
+    plural: qcclustertemplates
+    shortNames:
+    - qcct
+    singular: qcclustertemplate
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: QCClusterTemplate is the Schema for the qcclustertemplates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: QCClusterTemplateSpec defines the desired state of DOClusterTemplate.
+            properties:
+              template:
+                description: QCClusterTemplateResource contains spec for DOClusterSpec.
+                properties:
+                  spec:
+                    description: QCClusterSpec defines the desired state of QCCluster
+                    properties:
+                      controlPlaneEndpoint:
+                        description: ControlPlaneEndpoint represents the endpoint used to communicate with the control plane. If ControlPlaneDNS is unset, the QC load-balancer IP of the Kubernetes API Server is used.
+                        properties:
+                          host:
+                            description: The hostname on which the API server is serving.
+                            type: string
+                          port:
+                            description: The port on which the API server is serving.
+                            format: int32
+                            type: integer
+                        required:
+                        - host
+                        - port
+                        type: object
+                      network:
+                        description: NetworkSpec encapsulates all things related to GCP network.
+                        properties:
+                          apiServerLoadbalancer:
+                            description: Configures an API Server loadbalancers
+                            properties:
+                              resourceID:
+                                description: The QingCloud load balancer ID. If omitted, a new load balancer will be created.
+                                type: string
+                            type: object
+                          eip:
+                            description: EIP configuration.
+                            properties:
+                              bandwidth:
+                                description: Bandwidth defines the EIP bandwidth to use. default(10M/s).
+                                type: integer
+                              billingMode:
+                                description: BillingMode defines the EIP BillingMode to use. [bandwidth / traffic] default("traffic").
+                                type: string
+                              resourceID:
+                                description: ResourceID defines the EIP ID to use. If omitted, a new EIP will be created.
+                                type: string
+                            type: object
+                          vpc:
+                            description: VPC defines the VPC configuration.
+                            properties:
+                              resourceID:
+                                description: ResourceID defines the Router ID to use. If omitted, a new VPC router will be created.
+                                type: string
+                            type: object
+                          vxnets:
+                            description: VxNets configuration.
+                            items:
+                              properties:
+                                ipNetwork:
+                                  type: string
+                                resourceID:
+                                  description: ResourceID defines the VxNet ID to use. If omitted, a new VxNet will be created.
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                      zone:
+                        description: The QingCloud Region the cluster lives in.
+                        type: string
+                    required:
+                    - zone
+                    type: object
+                required:
+                - spec
+                type: object
+            required:
+            - template
+            type: object
+          status:
+            description: QCClusterTemplateStatus defines the observed state of QCClusterTemplate
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    cluster.x-k8s.io/v1beta1: v1beta1
+  name: qcmachines.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: QCMachine
+    listKind: QCMachineList
+    plural: qcmachines
+    singular: qcmachine
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Cluster to which this QCMachine belongs
+      jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
+      name: Cluster
+      type: string
+    - description: QingCloud instance state
+      jsonPath: .status.instanceStatus
+      name: State
+      type: string
+    - description: Machine ready status
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: QingCloud instance ID
+      jsonPath: .spec.providerID
+      name: InstanceID
+      type: string
+    - description: Machine object which owns with this QCMachine
+      jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
+      name: Machine
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: QCMachine is the Schema for the qcmachines API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: QCMachineSpec defines the desired state of QCMachine
+            properties:
+              imageID:
+                description: ImageID is the full reference to a valid image to be used for this machine. Takes precedence over ImageFamily.
+                type: string
+              instanceType:
+                description: Instance type.
+                type: string
+              osDiskSize:
+                description: OSDiskSize is the size of the root volume in GB.
+                type: integer
+              providerID:
+                description: ProviderID is the unique identifier as specified by the cloud provider.
+                type: string
+              sshKey:
+                description: SSHKeyID is the ssh key id to attach in QingCloud instances.
+                type: string
+              subnet:
+                description: Subnet is a reference to the subnetwork to use for this instance. If not specified, the first subnetwork retrieved from the Cluster Region and Network is picked.
+                type: string
+            required:
+            - instanceType
+            - sshKey
+            type: object
+          status:
+            description: QCMachineStatus defines the observed state of QCMachine
+            properties:
+              addresses:
+                description: Addresses contains the QingCloud instance associated addresses.
+                items:
+                  description: NodeAddress contains information for the node's address.
+                  properties:
+                    address:
+                      description: The node address.
+                      type: string
+                    type:
+                      description: Node address type, one of Hostname, ExternalIP or InternalIP.
+                      type: string
+                  required:
+                  - address
+                  - type
+                  type: object
+                type: array
+              failureMessage:
+                description: "FailureMessage will be set in the event that there is a terminal problem reconciling the Machine and will contain a more verbose string suitable for logging and human consumption. \n This field should not be set for transitive errors that a controller faces that are expected to be fixed automatically over time (like service outages), but instead indicate that something is fundamentally wrong with the Machine's spec or the configuration of the controller, and that manual intervention is required. Examples of terminal errors would be invalid combinations of settings in the spec, values that are unsupported by the controller, or the responsible controller itself being critically misconfigured. \n Any transient errors that occur during the reconciliation of Machines can be added as events to the Machine object and/or logged in the controller's output."
+                type: string
+              failureReason:
+                description: "FailureReason will be set in the event that there is a terminal problem reconciling the Machine and will contain a succinct value suitable for machine interpretation. \n This field should not be set for transitive errors that a controller faces that are expected to be fixed automatically over time (like service outages), but instead indicate that something is fundamentally wrong with the Machine's spec or the configuration of the controller, and that manual intervention is required. Examples of terminal errors would be invalid combinations of settings in the spec, values that are unsupported by the controller, or the responsible controller itself being critically misconfigured. \n Any transient errors that occur during the reconciliation of Machines can be added as events to the Machine object and/or logged in the controller's output."
+                type: string
+              instanceStatus:
+                description: InstanceStatus is the status of the QingCloud instance for this machine.
+                type: string
+              ready:
+                description: Ready is true when the provider resource is ready.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    cluster.x-k8s.io/v1beta1: v1beta1
+  name: qcmachinetemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: QCMachineTemplate
+    listKind: QCMachineTemplateList
+    plural: qcmachinetemplates
+    singular: qcmachinetemplate
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: QCMachineTemplate is the Schema for the qcmachinetemplates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: QCMachineTemplateSpec defines the desired state of QCMachineTemplate
+            properties:
+              template:
+                description: QCMachineTemplateResource describes the data needed to create an QCMachine from a template.
+                properties:
+                  spec:
+                    description: Spec is the specification of the desired behavior of the machine.
+                    properties:
+                      imageID:
+                        description: ImageID is the full reference to a valid image to be used for this machine. Takes precedence over ImageFamily.
+                        type: string
+                      instanceType:
+                        description: Instance type.
+                        type: string
+                      osDiskSize:
+                        description: OSDiskSize is the size of the root volume in GB.
+                        type: integer
+                      providerID:
+                        description: ProviderID is the unique identifier as specified by the cloud provider.
+                        type: string
+                      sshKey:
+                        description: SSHKeyID is the ssh key id to attach in QingCloud instances.
+                        type: string
+                      subnet:
+                        description: Subnet is a reference to the subnetwork to use for this instance. If not specified, the first subnetwork retrieved from the Cluster Region and Network is picked.
+                        type: string
+                    required:
+                    - instanceType
+                    - sshKey
+                    type: object
+                required:
+                - spec
+                type: object
+            required:
+            - template
+            type: object
+          status:
+            description: QCMachineTemplateStatus defines the observed state of QCMachineTemplate
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-controller-manager
+  namespace: capqc-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-leader-election-role
+  namespace: capqc-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - clusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machines
+  - machines/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclustertemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclustertemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcclustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachines/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachines/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachinetemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachinetemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - qcmachinetemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-leader-election-rolebinding
+  namespace: capqc-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: capqc-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: capqc-controller-manager
+  namespace: capqc-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capqc-manager-role
+subjects:
+- kind: ServiceAccount
+  name: capqc-controller-manager
+  namespace: capqc-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capqc-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: capqc-controller-manager
+  namespace: capqc-system
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+    kind: ControllerManagerConfig
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: 127.0.0.1:8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: eba92be2.cluster.x-k8s.io
+kind: ConfigMap
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+  name: capqc-manager-config
+  namespace: capqc-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    control-plane: controller-manager
+  name: capqc-controller-manager-metrics-service
+  namespace: capqc-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  selector:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-qingcloud
+    control-plane: controller-manager
+  name: capqc-controller-manager
+  namespace: capqc-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/provider: infrastructure-qingcloud
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-qingcloud
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=0
+        image: kubesphere/kube-rbac-proxy:v0.8.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 5m
+            memory: 64Mi
+      - args:
+        - --health-probe-bind-address=:8081
+        - --metrics-bind-address=127.0.0.1:8080
+        - --leader-elect
+        command:
+        - /manager
+        env:
+        - name: ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              key: qy_access_key_id
+              name: capqc-manager-bootstrap-credentials
+        - name: SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              key: qy_secret_access_key
+              name: capqc-manager-bootstrap-credentials
+        image: kubespheredev/cluster-api-qingcloud-controller:v0.0.1
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      serviceAccountName: capqc-controller-manager
+      terminationGracePeriodSeconds: 10

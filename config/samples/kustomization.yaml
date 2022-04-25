@@ -1,0 +1,7 @@
+## Append samples you want in your CSV to this file as resources ##
+resources:
+- infrastructure_v1beta1_qcmachine.yaml
+- infrastructure_v1beta1_qccluster.yaml
+- infrastructure_v1beta1_qcclustertemplate.yaml
+- infrastructure_v1beta1_qcmachinetemplate.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
