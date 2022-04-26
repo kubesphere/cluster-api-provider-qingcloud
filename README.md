@@ -14,6 +14,8 @@ previous cluster managers such as [kops][kops] and
 [kubicorn][kubicorn].
 
 ## Launching a Kubernetes cluster on QingCloud
+### Building OS image
+Before using cluster-api-provider-qingcloud, you need to [build a system image](./docs/os-img.md) containing k8s components on QingCloud.
 ### Initialize the management cluster
 #### Install Cluster-API
 ```shell
@@ -27,7 +29,7 @@ clusterctl init
 ```
 #### Deploy cluster-api provider qingcloud 
 ```shell
-kubectl apply -f https://github.com/kubesphere/cluster-api-provider-qingcloud/blob/master/manifests.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubesphere/cluster-api-provider-qingcloud/main/manifests.yaml
 ```
 #### Create api key secret for QingCloud
 ```shell
@@ -36,7 +38,7 @@ kubectl create secret generic -n capqc-system capqc-manager-bootstrap-credential
 ### Creating a workload cluster
 #### Create cluster resource
 ```shell
-cat <<EOF > kubectl apply -f -
+cat <<EOF | kubectl apply -f -
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
@@ -71,7 +73,7 @@ EOF
 ```
 #### Create control plane resources 
 ```shell
-cat <<EOF > kubectl apply -f -
+cat <<EOF | kubectl apply -f -
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
@@ -82,14 +84,17 @@ spec:
   kubeadmConfigSpec:
     initConfiguration:
       nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
         kubeletExtraArgs:
           cloud-provider: external
           provider-id: qingcloud://${instance_id}
         name: ${instance_name}
     joinConfiguration:
       nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
         kubeletExtraArgs:
           cloud-provider: external
+          provider-id: qingcloud://${instance_id}
         name: ${instance_name}
 
   machineTemplate:
@@ -119,6 +124,7 @@ EOF
 
 #### Create workers resources
 ```shell
+cat <<EOF | kubectl apply -f -
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -167,9 +173,12 @@ spec:
     spec:
       joinConfiguration:
         nodeRegistration:
+          criSocket: unix:///run/containerd/containerd.sock
           kubeletExtraArgs:
             cloud-provider: external
+            provider-id: qingcloud://${instance_id}
           name: ${instance_name}
+EOF
 ```
 #### Scale cluster
 ```shell
