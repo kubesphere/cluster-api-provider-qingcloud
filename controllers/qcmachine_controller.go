@@ -18,13 +18,19 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"time"
+
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/compute"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
+	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/clusterclient"
+	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/nodes"
 	"github.com/pkg/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -34,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -333,6 +338,23 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 			}
 		}
 		machineScope.SetReady()
+
+		machineScope.Info("update cluster nodes taints","node name", qcMachine.Name)
+		clusterKubeconfigSecret := &corev1.Secret{}
+		clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name+"-kubeconfig"}
+		if err := r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
+			machineScope.Error(err,fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		err, custerclient := clusterclient.GetClusterClient(clusterKubeconfigSecret)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+		}
+
+		if err = nodes.DeleteTaints(custerclient, qcMachine); err != nil {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+		}
+
 		return ctrl.Result{}, nil
 	default:
 		machineScope.SetFailureReason(capierrors.UpdateMachineError)

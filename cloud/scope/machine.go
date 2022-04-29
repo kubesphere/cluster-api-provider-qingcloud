@@ -3,6 +3,7 @@ package scope
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-logr/logr"
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
 	"github.com/pkg/errors"
@@ -172,7 +173,6 @@ func (m *MachineScope) GetBootstrapData() ([]byte, error) {
 	if err := m.client.Get(context.TODO(), key, secret); err != nil {
 		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for DOMachine %s/%s", m.Namespace(), m.Name())
 	}
-
 	value, ok := secret.Data["value"]
 	if !ok {
 		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
