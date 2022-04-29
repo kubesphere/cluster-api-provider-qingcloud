@@ -18,6 +18,8 @@ package controllers
 
 import (
 	"context"
+	"time"
+
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
@@ -37,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 )
 
 // QCClusterReconciler reconciles a QCCluster object
