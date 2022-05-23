@@ -83,7 +83,7 @@ func (s *Service) GetEIP(eipID infrav1beta1.QCResourceID) (*qcs.EIP, error) {
 	return o.EIPSet[0], nil
 }
 
-func (s *Service) PortForwardingForEIP(intelIP string, routerID infrav1beta1.QCResourceID) error {
+func (s *Service) PortForwardingForEIP(contronPlanePort, intelIP string, routerID infrav1beta1.QCResourceID) error {
 	c := s.scope.Router
 	o, err := c.AddRouterStatics(
 		&qcs.AddRouterStaticsInput{
@@ -91,7 +91,7 @@ func (s *Service) PortForwardingForEIP(intelIP string, routerID infrav1beta1.QCR
 			Statics: []*qcs.RouterStatic{
 				&qcs.RouterStatic{
 					StaticType: qcs.Int(1),
-					Val1:       qcs.String("6443"),
+					Val1:       qcs.String(contronPlanePort),
 					Val2:       qcs.String(intelIP),
 					Val3:       qcs.String("6443"),
 				},

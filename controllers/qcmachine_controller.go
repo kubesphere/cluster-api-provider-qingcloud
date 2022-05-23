@@ -339,11 +339,11 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		}
 		machineScope.SetReady()
 
-		machineScope.Info("update cluster nodes taints","node name", qcMachine.Name)
+		machineScope.Info("update cluster nodes taints", "node name", qcMachine.Name)
 		clusterKubeconfigSecret := &corev1.Secret{}
-		clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name+"-kubeconfig"}
+		clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name + "-kubeconfig"}
 		if err := r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
-			machineScope.Error(err,fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
+			machineScope.Error(err, fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
 			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 		}
 		err, custerclient := clusterclient.GetClusterClient(clusterKubeconfigSecret)
@@ -352,7 +352,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		}
 
 		if err = nodes.DeleteTaints(custerclient, qcMachine); err != nil {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 		}
 
 		return ctrl.Result{}, nil

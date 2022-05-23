@@ -90,12 +90,22 @@ spec:
                                   If omitted, a new EIP will be created.
                                 type: string
                             type: object
+                          securityGroup:
+                            description: SecurityGroup defines the SecurityGroup configuration.
+                            properties:
+                              resourceID:
+                                description: The QingCloud load balancer ID. If omitted,
+                                  a new load balancer will be created.
+                                type: string
+                            type: object
                           vpc:
                             description: VPC defines the VPC configuration.
                             properties:
-                              resourceID:
+                              reclaimPolicy:
                                 description: ResourceID defines the Router ID to use.
                                   If omitted, a new VPC router will be created.
+                                type: string
+                              resourceID:
                                 type: string
                             type: object
                           vxnets:

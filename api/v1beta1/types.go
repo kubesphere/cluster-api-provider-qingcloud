@@ -1,6 +1,8 @@
 package v1beta1
 
-import "strings"
+import (
+	"strings"
+)
 
 type QCResourceID *string
 
@@ -14,6 +16,9 @@ type QCNetwork struct {
 	// VPC defines the VPC configuration.
 	// +optional
 	VPC QCVPC `json:"vpc,omitempty"`
+	// SecurityGroup defines the SecurityGroup configuration.
+	// +optional
+	SecurityGroup SecurityGroup `json:"securityGroup,omitempty"`
 	// Configures an API Server loadbalancers
 	// +optional
 	APIServerLoadbalancer QCLoadBalancer `json:"apiServerLoadbalancer,omitempty"`
@@ -37,11 +42,30 @@ type QCVxNet struct {
 	IPNetwork  string `json:"ipNetwork,omitempty"`
 }
 
-type QCVPC struct {
-	// ResourceID defines the Router ID to use. If omitted, a new VPC router will be created.
+type SecurityGroup struct {
+	// The QingCloud load balancer ID. If omitted, a new load balancer will be created.
 	// +optional
 	ResourceID string `json:"resourceID,omitempty"`
 }
+
+type QCVPC struct {
+	// ResourceID defines the Router ID to use. If omitted, a new VPC router will be created.
+	// +optional
+	ReclaimPolicy ReclaimPolicy `json:"reclaimPolicy,omitempty"`
+	ResourceID    string        `json:"resourceID,omitempty"`
+}
+
+// ReclaimPolicy describes a policy for end-of-life maintenance of vpc.
+// +enum
+type ReclaimPolicy string
+
+const (
+	// ReclaimDelete means the vpc will be deleted from Kubernetes on release from its claim.
+	ReclaimDelete ReclaimPolicy = "Delete"
+	// ReclaimRetain means the vpc will be left in its current phase (Released) for manual reclamation by the administrator.
+	// The default policy is Retain.
+	ReclaimRetain ReclaimPolicy = "Retain"
+)
 
 type QCLoadBalancer struct {
 	// The QingCloud load balancer ID. If omitted, a new load balancer will be created.
@@ -66,7 +90,7 @@ type QCNetworkResources struct {
 	// VxNetRef is the id of VxNet.
 	// +optional
 	VxNetsRef []VxNetRef `json:"vxnetsRef,omitempty"`
-	// SecurityGroupRefRef is the id of SecurityGroup.
+	// SecurityGroupRef is the id of SecurityGroup.
 	// +optional
 	SecurityGroupRef QCResourceReference `json:"securityGroupRef,omitempty"`
 }
