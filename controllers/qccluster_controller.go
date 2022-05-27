@@ -396,36 +396,11 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		}
 		apiServerLoadbalancer.ResourceID = qcs.StringValue(lbID)
 		apiServerLoadbalancerRef.ResourceID = qcs.StringValue(lbID)
-		_, err = networkingsvc.GetLoadBalancer(lbID)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// wait for loadbalancer
-		for i := 0; i < 5; i++ {
-			l, err := networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-
-			if len(qcs.StringValueSlice(l.LoadBalancerSet[0].PrivateIPs)) != 0 {
-				apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
-				loadbalancerIP = qcs.StringValueSlice(l.LoadBalancerSet[0].PrivateIPs)[0]
-
-				break
-			}
-		}
 
 	} else if apiServerLoadbalancerRef.ResourceID != "" && apiServerLoadbalancer.ResourceID == "" {
 		apiServerLoadbalancer.ResourceID = apiServerLoadbalancerRef.ResourceID
 	} else {
-		o, err := networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancer.ResourceID))
-		if err != nil {
-			return reconcile.Result{}, err
-		}
 		apiServerLoadbalancerRef.ResourceID = apiServerLoadbalancer.ResourceID
-		apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(o.LoadBalancerSet[0].Status))
-		loadbalancerIP = qcs.StringValueSlice(o.LoadBalancerSet[0].PrivateIPs)[0]
 	}
 
 	// wait for loadbalancer
@@ -438,6 +413,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		clusterScope.Info("loadbalancer not ready")
 		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
+
+	loadbalancerIP = qcs.StringValueSlice(l.LoadBalancerSet[0].PrivateIPs)[0]
 
 	// create loadbalancer listener
 	apiServerLoadbalancerListenRef := clusterScope.APIServerLoadbalancerListenerRef()
@@ -567,7 +544,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 				if err := networkingsvc.LeaveRouter(qcs.String(vpcRef.ResourceID), qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
 					return reconcile.Result{RequeueAfter: 20 * time.Second}, err
 				}
-
+				time.Sleep(20 * time.Second)
 				if err := networkingsvc.DeleteVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
 					return reconcile.Result{RequeueAfter: 10 * time.Second}, err
 				}
