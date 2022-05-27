@@ -30,6 +30,27 @@ func (s *Service) CreateVxNet() (infrav1beta1.QCResourceID, error) {
 	return o.VxNets[0], nil
 }
 
+// CreateVxNet gets a VxNet for cluster.
+func (s *Service) GetVxNet(vxnetID infrav1beta1.QCResourceID) (*qcs.DescribeVxNetsOutput, error) {
+	c := s.scope.VxNet
+
+	o, err := c.DescribeVxNets(
+		&qcs.DescribeVxNetsInput{
+			VxNets:    []*string{vxnetID},
+			VxNetType: qcs.Int(1),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if qcs.IntValue(o.RetCode) != 0 {
+		return nil, errors.New(qcs.StringValue(o.Message))
+	}
+
+	return o, nil
+}
+
 // DeleteVxNet delete a vxnet for cluster.
 func (s *Service) DeleteVxNet(vxnetID infrav1beta1.QCResourceID) error {
 	c := s.scope.VxNet
@@ -45,6 +66,27 @@ func (s *Service) DeleteVxNet(vxnetID infrav1beta1.QCResourceID) error {
 
 	if qcs.IntValue(o.RetCode) != 0 {
 		return errors.New(qcs.StringValue(o.Message))
+	}
+
+	return nil
+}
+
+// LeaveRouter delete a vxnet from vpc.
+func (s *Service) LeaveRouter(routerID, vxnetID infrav1beta1.QCResourceID) error {
+	r := s.scope.Router
+
+	l, err := r.LeaveRouter(
+		&qcs.LeaveRouterInput{
+			Router: routerID,
+			VxNets: []*string{vxnetID},
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	if qcs.IntValue(l.RetCode) != 0 {
+		return errors.New(qcs.StringValue(l.Message))
 	}
 
 	return nil

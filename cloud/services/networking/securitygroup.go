@@ -9,7 +9,7 @@ import (
 
 // CreateSecurityGroup creates a SecurityGroup for cluster.
 func (s *Service) CreateSecurityGroup() (infrav1beta1.QCResourceID, error) {
-	c := s.scope.SecurityGroup
+	c := s.scope.SecurityGroupService
 	clusterName := infrav1beta1.QCSafeName(s.scope.Name())
 	name := fmt.Sprintf("%s-%s", clusterName, s.scope.UID())
 
@@ -31,7 +31,7 @@ func (s *Service) CreateSecurityGroup() (infrav1beta1.QCResourceID, error) {
 
 // AddSecurityGroupRules adds SecurityGroupRules for cluster.
 func (s *Service) AddSecurityGroupRules(securityGroupID infrav1beta1.QCResourceID, rules []*qcs.SecurityGroupRule) (infrav1beta1.QCResourceID, error) {
-	c := s.scope.SecurityGroup
+	c := s.scope.SecurityGroupService
 	o, err := c.AddSecurityGroupRules(
 		&qcs.AddSecurityGroupRulesInput{
 			Rules:         rules,
@@ -66,7 +66,7 @@ func (s *Service) GetSecurityGroup(securityGroupID infrav1beta1.QCResourceID) (*
 		return nil, nil
 	}
 
-	o, err := s.scope.SecurityGroup.DescribeSecurityGroups(
+	o, err := s.scope.SecurityGroupService.DescribeSecurityGroups(
 		&qcs.DescribeSecurityGroupsInput{
 			SecurityGroups: []*string{securityGroupID},
 		},
@@ -83,7 +83,7 @@ func (s *Service) GetSecurityGroup(securityGroupID infrav1beta1.QCResourceID) (*
 
 // DeleteSecurityGroup  creates a LB for cluster.
 func (s *Service) DeleteSecurityGroup(securityGroupID infrav1beta1.QCResourceID) error {
-	c := s.scope.SecurityGroup
+	c := s.scope.SecurityGroupService
 
 	o, err := c.DeleteSecurityGroups(
 		&qcs.DeleteSecurityGroupsInput{

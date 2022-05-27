@@ -8,13 +8,13 @@ import (
 
 // QCClients hold all necessary clients to work with the QingCloud API.
 type QCClients struct {
-	Instance      *qcs.InstanceService
-	Router        *qcs.RouterService
-	VxNet         *qcs.VxNetService
-	SecurityGroup *qcs.SecurityGroupService
-	LoadBalancer  *qcs.LoadBalancerService
-	EIP           *qcs.EIPService
-	UserData      *qcs.UserDataService
+	Instance             *qcs.InstanceService
+	Router               *qcs.RouterService
+	VxNet                *qcs.VxNetService
+	SecurityGroupService *qcs.SecurityGroupService
+	LoadBalancer         *qcs.LoadBalancerService
+	EIP                  *qcs.EIPService
+	UserData             *qcs.UserDataService
 }
 
 func NewQCClients(zone string) (*QCClients, error) {
@@ -61,12 +61,12 @@ func NewQCClients(zone string) (*QCClients, error) {
 		return nil, err
 	}
 	return &QCClients{
-		Instance:      instance,
-		Router:        router,
-		VxNet:         vxnet,
-		SecurityGroup: securityGroup,
-		LoadBalancer:  loadbalancer,
-		EIP:           eip,
-		UserData:      userData,
+		Instance:             instance,
+		Router:               router,
+		VxNet:                vxnet,
+		SecurityGroupService: securityGroup,
+		LoadBalancer:         loadbalancer,
+		EIP:                  eip,
+		UserData:             userData,
 	}, nil
 }

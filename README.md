@@ -66,8 +66,19 @@ metadata:
   name: qc-test
   namespace: default
 spec:
-  # TODO(user): Add fields here
   zone: ap2a
+  ## Creating a cluster in an existing vpc needs to be configured as follows
+  ## EIP and Port for ControlPlaneEndpoint
+  #  controlPlaneEndpoint:
+  #    host: 139.198.120.22
+  #    port: 6440
+  #  network:
+  #    vpc:
+  #      resourceID: rtr-b7kvpnwv
+  ## ipNetwork required for vxnet to join vpc.
+  ## This network must be unused in your vpc.
+  #    vxnets:
+  #    - ipNetwork: 192.168.100.0/24
 
 EOF
 ```
@@ -103,7 +114,7 @@ spec:
       kind: QCMachineTemplate
       name: qc-test-control-plane
   replicas: 1
-  version: v1.21.5
+  version: v1.23.6
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -148,7 +159,7 @@ spec:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: QCMachineTemplate
         name: qc-test-md-0
-      version: v1.21.5
+      version: v1.23.6
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: QCMachineTemplate
@@ -184,7 +195,6 @@ EOF
 ```shell
 kubectl scale machinedeployment qc-test-md-0 --replicas=3
 ```
-
 
 <!-- References -->
 

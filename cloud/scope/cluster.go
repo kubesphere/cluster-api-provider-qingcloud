@@ -136,3 +136,13 @@ func (s *ClusterScope) RouterRef() *infrav1beta1.QCResourceReference {
 func (s *ClusterScope) SecurityGroupRef() *infrav1beta1.QCResourceReference {
 	return &s.QCCluster.Status.Network.SecurityGroupRef
 }
+
+// SecurityGroup get the QCCluster Network SecurityGroup id.
+func (s *ClusterScope) SecurityGroup() *infrav1beta1.SecurityGroup {
+	return &s.QCCluster.Spec.Network.SecurityGroup
+}
+
+// GetVPCReclaimPolicy get the VPC Reclaim Policy.
+func (s *ClusterScope) GetVPCReclaimPolicy() infrav1beta1.ReclaimPolicy {
+	return s.QCCluster.Spec.Network.VPC.ReclaimPolicy
+}
