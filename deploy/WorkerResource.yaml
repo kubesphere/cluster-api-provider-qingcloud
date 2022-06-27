@@ -1,0 +1,55 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: qc-test-md-0
+  namespace: default
+spec:
+  clusterName: qc-test
+  replicas: 1
+  selector:
+    matchLabels: null
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: qc-test-md-0
+      clusterName: qc-test
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: QCMachineTemplate
+        name: qc-test-md-0
+      version: v1.23.6
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: QCMachineTemplate
+metadata:
+  name: qc-test-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      # It can be replaced with your need.
+      instanceType: <instanceType>
+      # It need to be replaced with your own imageID.
+      imageID: <imageID>
+      # It need to be replaced with your own sshkey.
+      sshKey: <sshKey>
+
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: qc-test-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          criSocket: unix:///run/containerd/containerd.sock
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: qingcloud://${instance_id}
+          name: ${instance_name}

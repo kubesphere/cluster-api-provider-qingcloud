@@ -1,0 +1,1 @@
+Auto install CNI, CSI, Ingress, harbor, KubeSphere

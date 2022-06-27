@@ -16,6 +16,8 @@ previous cluster managers such as [kops][kops] and
 ## Launching a Kubernetes cluster on QingCloud
 ### Building OS image
 Before using cluster-api-provider-qingcloud, you need to [build a system image](./docs/os-img.md) containing k8s components on QingCloud.
+### Create QingCloud API access key
+[doc for QingCloud API access key](https://docs.qingcloud.com/product/api/common/signature)
 ### Initialize the management cluster
 #### Install Cluster-API
 ```shell
@@ -69,17 +71,34 @@ spec:
   zone: ap2a
   ## Creating a cluster in an existing vpc needs to be configured as follows
   ## EIP and Port for ControlPlaneEndpoint
-  #  controlPlaneEndpoint:
-  #    host: 139.198.120.22
-  #    port: 6440
-  #  network:
-  #    vpc:
-  #      resourceID: rtr-b7kvpnwv
+#  controlPlaneEndpoint:
+#    host: <controlPlaneEndpointEIP>
+#    port: <port>
+#  network:
+#    vpc:
+#      resourceID: <VPCID>
   ## ipNetwork required for vxnet to join vpc.
   ## This network must be unused in your vpc.
-  #    vxnets:
-  #    - ipNetwork: 192.168.100.0/24
-
+#    vxnets:
+#    - ipNetwork: 192.168.100.0/24
+  ## clusterAutoScale will automatically control the cluster scale.
+  ## When the average CPU utilization exceed the set value, work nodes will be added automatically.
+  ## clusterAutoScale can not reduce the cluster size. 
+#  clusterAutoScale:
+#    enabled: true
+#    minReplicas: 1
+#    maxReplicas: 3
+#    averageCPUUtilization: 80
+  ## Enable storageClass, will automatically install QingCloud CSI in cluster.
+#  storageClass:
+#    enabled: true
+  ## Enable ingress, will automatically install nginx-ingress in cluster.
+#  ingress:
+#    enabled: true
+  ## Enable kubesphere, will automatically install kubesphere in cluster.
+  ## Console : http://<EIP>:30880
+#  kubesphere:
+#    enabled: true
 EOF
 ```
 #### Create control plane resources 
@@ -194,6 +213,12 @@ EOF
 #### Scale cluster
 ```shell
 kubectl scale machinedeployment qc-test-md-0 --replicas=3
+```
+
+#### Delete cluster
+```shell
+kubectl delete machinedeployments qc-test-md-0
+kubectl delete cluster qc-test
 ```
 
 <!-- References -->
