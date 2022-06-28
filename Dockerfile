@@ -20,7 +20,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 FROM ubuntu:20.04
 WORKDIR /
 RUN apt-get -qq update \
-    && apt-get -qq install -y --no-install-recommends ca-certificates curl
+    && apt-get -qq install -y --no-install-recommends ca-certificates curl \
+    && apt-get autoremove --purge \
+    && apt-get clean
 COPY --from=builder /workspace/manager .
 #USER 65532:65532
 ENTRYPOINT ["/manager"]

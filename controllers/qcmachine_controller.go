@@ -24,6 +24,7 @@ import (
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/compute"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
+	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/clusterautoscale"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/clusterclient"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/nodes"
 	"github.com/pkg/errors"
@@ -32,6 +33,7 @@ import (
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
@@ -55,13 +57,14 @@ type QCMachineReconciler struct {
 	ReconcileTimeout time.Duration
 }
 
-//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines/finalizers,verbs=update
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
-//+kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=qcmachines/finalizers,verbs=update
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments,verbs=*
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -110,6 +113,7 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
 
+	// Fetch the QCCluster.
 	if err := r.Get(ctx, qcClusternamespacedName, qcCluster); err != nil {
 		log.Info("QCCluster is not available yet")
 		return ctrl.Result{}, nil
@@ -121,6 +125,7 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
+	// create QCClient for create QingCloud instances.
 	qcClients, err := scope.NewQCClients(qcCluster.Spec.Zone)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -160,7 +165,8 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}()
 
 	// handle deleted machines
-	if !qcMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+	// delete instances on QingCloud
+	if !qcMachine.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, machineScope, clusterScope)
 	}
 
@@ -268,7 +274,10 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 
 func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	machineScope.Info("Reconciling QCMachine (Instance)")
-	qcMachine := machineScope.QCMachine
+	machine := machineScope.Machine.DeepCopy()
+	qcMachine := machineScope.QCMachine.DeepCopy()
+	qcCluster := machineScope.QCCluster.DeepCopy()
+	zone := qcCluster.Spec.Zone
 
 	// If the QCMachine is in an error state, return early.
 	if qcMachine.Status.FailureReason != nil || qcMachine.Status.FailureMessage != nil {
@@ -303,6 +312,8 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 			machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatusPending)
 			return ctrl.Result{}, err
 		}
+
+		// create instance on QingCloud.
 		instanceID, err = computesvc.CreateInstance(machineScope)
 		if err != nil {
 			err = errors.Errorf("Failed to create instance for QCMachine %s/%s: %v", qcMachine.Namespace, qcMachine.Name, err)
@@ -332,27 +343,123 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		r.Recorder.Eventf(qcMachine, corev1.EventTypeNormal, "QCMachine instance is running", "QCMachine %s - has ready status", *machineScope.GetInstanceID())
 		if !machineScope.QCMachine.Status.Ready && machineScope.Role() == infrav1beta1.APIServerRoleTagValue {
 			networksvc := networking.NewService(ctx, clusterScope)
-			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
+			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID),
+				qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID, "kube-apiserver",6443); err != nil {
 				machineScope.Info("add instance to lb failed")
 				return ctrl.Result{}, err
+			}
+			if qcCluster.Spec.KubeSphere.Enabled {
+				if err = networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID),
+					qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID, "kubesphere-console",30880); err != nil {
+					machineScope.Info("add instance to lb failed")
+					return ctrl.Result{}, err
+				}
+			}
+			if qcCluster.Spec.Ingress.Enabled {
+				if err = networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID),
+					qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID, "ingress-http",30080); err != nil {
+					machineScope.Info("add instance to lb failed")
+					return ctrl.Result{}, err
+				}
+				if err = networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID),
+					qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID, "ingress-https",30443); err != nil {
+					machineScope.Info("add instance to lb failed")
+					return ctrl.Result{}, err
+				}
 			}
 		}
 		machineScope.SetReady()
 
-		machineScope.Info("update cluster nodes taints", "node name", qcMachine.Name)
-		clusterKubeconfigSecret := &corev1.Secret{}
-		clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name + "-kubeconfig"}
-		if err := r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
-			machineScope.Error(err, fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
-		}
-		err, custerclient := clusterclient.GetClusterClient(clusterKubeconfigSecret)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
-		}
+		if !controlPlaneNode(machine.ObjectMeta.Labels) {
+			// get kubernetes clients by secret
+			machineScope.Info("update cluster nodes taints", "node name", qcMachine.Name)
+			clusterKubeconfigSecret := &corev1.Secret{}
+			clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name + "-kubeconfig"}
+			if err := r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
+				machineScope.Error(err, fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+			}
+			clusterclients, err := clusterclient.GetClusterClients(clusterKubeconfigSecret)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+			}
 
-		if err = nodes.DeleteTaints(custerclient, qcMachine); err != nil {
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+			// delete the taint for the machine
+			if err = nodes.DeleteTaints(clusterclients, qcMachine); err != nil {
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+			}
+
+			if !nodes.CalicoStatus(ctx, clusterclients) {
+				if err = nodes.InstallCalico(ctx, clusterclients); err != nil {
+					klog.Error("install calico in cluster failed", err)
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+				}
+			}
+
+			// install qingcloud csi
+			if qcCluster.Spec.StorageClass.Enabled {
+				if !nodes.StorageStatus(ctx, clusterclients) {
+					if err := nodes.InstallQCCSI(ctx, clusterclients, &clusterScope.QCClients, zone); err != nil {
+						klog.Error("install QingCloud CSI in cluster failed", err)
+						return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+					}
+				}
+			}
+
+			// install ingress
+			if qcCluster.Spec.Ingress.Enabled {
+				if !nodes.IngressStatus(ctx, clusterclients) {
+					if err = nodes.InstallIngress(ctx, clusterclients); err != nil {
+						klog.Error("install Ingress in cluster failed", err)
+						return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+					}
+				}
+			}
+
+			// install kubesphere
+			if qcCluster.Spec.KubeSphere.Enabled {
+				if !nodes.KubeSphereStatus(ctx, clusterclients) {
+					if nodes.StorageStatus(ctx, clusterclients) {
+						if err = nodes.InstallKubesphere(ctx, clusterclients); err != nil {
+							klog.Error("install KubeSphere in cluster failed", err)
+							return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+						}
+					} else {
+						klog.Error("waiting for storageclass ready", err)
+						return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+					}
+				}
+			}
+
+			// auto scale cluster replicas
+			if qcCluster.Spec.ClusterAutoScale.Enabled {
+				if !nodes.MetricsStatus(ctx, clusterclients) {
+					machineScope.Info("install metrics in cluster", "cluster name", qcCluster.Name)
+					if err := nodes.InstallMetrics(ctx, clusterclients); err != nil {
+						klog.Error("install metrics in cluster failed", err)
+						return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+					}
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+				}
+
+				// Fetch the machineDeployment.
+				machineDeployment, err := GetOwnerMachineDeployment(ctx, r.Client, machine)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				if machineDeployment == nil {
+					machineScope.Info("Machine Controller has not yet set OwnerRef, get machineDeployment failed")
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+				}
+
+				replicaCalculator := clusterautoscale.NewReplicaCalculator(r.Client, machineScope, machineDeployment, clusterclients)
+				if err := replicaCalculator.AutoScaleClusterReplicase(ctx); err != nil {
+					klog.Error("auto scale replicas for machineDeployment failed", err)
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+				}
+				// The autoScale cluster period is 5 minute
+				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+			}
 		}
 
 		return ctrl.Result{}, nil
@@ -361,4 +468,26 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		machineScope.SetFailureMessage(errors.Errorf("QCMachine instance state %s is unexpected", instanceState))
 		return ctrl.Result{Requeue: true}, nil
 	}
+}
+
+func GetOwnerMachineDeployment(ctx context.Context, c client.Client, machine *clusterv1beta1.Machine) (*clusterv1beta1.MachineDeployment, error) {
+	machineDeploy := &clusterv1beta1.MachineDeployment{}
+
+	machineLabels := machine.ObjectMeta.Labels
+	machineDeploymentName := machineLabels["cluster.x-k8s.io/deployment-name"]
+	machineDeploynamespacedName := client.ObjectKey{
+		Namespace: machine.Namespace,
+		Name:      machineDeploymentName,
+	}
+	if err := c.Get(ctx, machineDeploynamespacedName, machineDeploy); err != nil {
+		return nil, err
+	}
+	return machineDeploy, nil
+}
+
+func controlPlaneNode(labels map[string]string) bool {
+	if _, ok := labels["cluster.x-k8s.io/control-plane"]; ok {
+		return true
+	}
+	return false
 }

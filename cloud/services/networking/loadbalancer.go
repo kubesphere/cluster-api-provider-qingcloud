@@ -2,6 +2,7 @@ package networking
 
 import (
 	"fmt"
+	
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
 	"github.com/pkg/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
@@ -88,15 +89,15 @@ func (s *Service) AddLoadBalancerListener(lbID infrav1beta1.QCResourceID) (*qcs.
 	return l, nil
 }
 
-func (s *Service) AddLoadBalancerBackend(lbID, lbListenerID, instanceID infrav1beta1.QCResourceID) error {
+func (s *Service) AddLoadBalancerBackend(lbID, lbListenerID, instanceID infrav1beta1.QCResourceID, backendName string, port int) error {
 	c := s.scope.LoadBalancer
 
 	b, err := c.AddLoadBalancerBackends(
 		&qcs.AddLoadBalancerBackendsInput{
 			Backends: []*qcs.LoadBalancerBackend{
 				&qcs.LoadBalancerBackend{
-					LoadBalancerBackendName: qcs.String("kube-apiserver"),
-					Port:                    qcs.Int(6443),
+					LoadBalancerBackendName: qcs.String(backendName),
+					Port:                    qcs.Int(port),
 					ResourceID:              instanceID,
 				},
 			},

@@ -1,0 +1,52 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: qc-test
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 192.168.0.0/16
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: qc-test-control-plane
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: QCCluster
+    name: qc-test
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: QCCluster
+metadata:
+  name: qc-test
+  namespace: default
+spec:
+  zone: ap2a
+  ## Creating a cluster in an existing vpc needs to be configured as follows
+  ## EIP and Port for ControlPlaneEndpoint
+#  controlPlaneEndpoint:
+#    host: 45.120.216.79
+#    port: 6440
+#  network:
+#    vpc:
+#      resourceID: rtr-iqbtcpac
+  ## ipNetwork required for vxnet to join vpc.
+  ## This network must be unused in your vpc.
+#    vxnets:
+#    - ipNetwork: 192.168.110.0/24
+#  clusterAutoScale:
+#    enabled: true
+#    minReplicas: 1
+#    maxReplicas: 3
+#    averageCPUUtilization: 80
+#  storageClass:
+#    enabled: true
+#  ingress:
+#    enabled: true
+#  kubesphere:
+#    enabled: true
+
+

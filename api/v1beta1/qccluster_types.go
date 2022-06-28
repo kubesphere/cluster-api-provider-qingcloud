@@ -45,6 +45,22 @@ type QCClusterSpec struct {
 	// of the Kubernetes API Server is used.
 	// +optional
 	ControlPlaneEndpoint clusterv1beta1.APIEndpoint `json:"controlPlaneEndpoint"`
+	// StorageClass management storageClass in cluster
+	// if set to true, it will auto install openebs in cluster
+	StorageClass Enable `json:"storageClass,omitempty"`
+	// Ingress management Ingress controller in cluster
+	// if set to true, it will auto install nginx-ingress in cluster
+	Ingress Enable `json:"ingress,omitempty"`
+	// Repository management image repository in cluster
+	// if set to true, it will auto install harbor in cluster
+	Repository Enable `json:"repository,omitempty"`
+	// KubeSphere is a distributed operating system for cloud-native application management
+	// if set to true, it will auto install harbor in cluster
+	KubeSphere Enable `json:"kubesphere,omitempty"`
+	// ClusterAutoScale manage the cluster nodes
+	// if enabled, it will auto scale the cluster nodes.
+	// +optional
+	ClusterAutoScale ClusterAutoScale `json:"clusterAutoScale,omitempty"`
 }
 
 // QCClusterStatus defines the observed state of QCCluster
@@ -58,6 +74,36 @@ type QCClusterStatus struct {
 	// Network encapsulates all things related to DigitalOcean network.
 	// +optional
 	Network QCNetworkResources `json:"network,omitempty"`
+	// CurrentReplicas is current number of replicas of nodes managed by this clusterAutoScaler,
+	// as last seen by the clusterAutoScaler.
+	// +optional
+	CurrentReplicas int `json:"currentReplicas,omitempty"`
+
+	// DesiredReplicas is the desired number of replicas of nodes managed by this clusterAutoScaler,
+	// as last calculated by the clusterAutoScaler.
+	DesiredReplicas int `json:"desiredReplicas,omitempty"`
+}
+
+type Enable struct {
+	Enabled bool `json:"enabled,omitempty"`
+}
+
+type ClusterAutoScale struct {
+	// Enabled clusterAutoScale, if it's not specified, default false.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// MinReplicas is the lower limit for the number of replicas to which the clusterAutoScale
+	// can scale down.  It defaults to 1 node.  minReplicas is allowed to be 0.  Scaling is
+	// active as long as at least one metric value is available.
+	// +optional
+	MinReplicas int32 `json:"minReplicas,omitempty"`
+	// MaxReplicas is the upper limit for the number of replicas to which the clusterAutoScale can scale up.
+	// It cannot be less that minReplicas.
+	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+	// target average CPU utilization (represented as a percentage of requested CPU) over all the nodes;
+	// if not specified the default autoscaling policy will be used.
+	// +optional
+	TargetCPUUtilizationPercentage int32 `json:"averageCPUUtilization,omitempty"`
 }
 
 //+kubebuilder:object:root=true

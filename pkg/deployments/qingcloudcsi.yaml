@@ -1,0 +1,643 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-qingcloud-controller
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-qingcloud-node
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: node
+    owner: yunify
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-qingcloud
+  annotations:
+    storageclass.kubesphere.io/supported-access-modes: '["ReadWriteOnce"]'
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: disk.csi.qingcloud.com
+parameters:
+  fsType: ext4
+  replica: "2"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-provisioner
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch"]
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-attacher
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["patch"]
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-snapshotter
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["create", "get", "list", "watch", "update", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents/status"]
+    verbs: ["update"]
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-resizer
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-controller
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        app: csi-qingcloud
+        role: controller
+        owner: yunify
+rules: []
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-node
+  labels:
+    app: csi-qingcloud
+    role: node
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-controller
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-qingcloud-controller
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: csi-qingcloud-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-node
+  labels:
+    app: csi-qingcloud
+    role: node
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-qingcloud-node
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: csi-qingcloud-node
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: kube-system
+  name: csi-qingcloud-provisioner
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: kube-system
+  name: csi-qingcloud-attacher
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-snapshotter
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-resizer
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-provsioner
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-qingcloud-controller
+    namespace: kube-system
+roleRef:
+  kind: Role
+  name: csi-qingcloud-provisioner
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-attacher
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-qingcloud-controller
+    namespace: kube-system
+roleRef:
+  kind: Role
+  name: csi-qingcloud-attacher
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-snapshotter
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-snapshotter
+    namespace: kube-system
+roleRef:
+  kind: Role
+  name: csi-qingcloud-snapshotter
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-qingcloud-resizer
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+subjects:
+  - kind: ServiceAccount
+    name: csi-resizer
+    namespace: kube-system
+roleRef:
+  kind: Role
+  name: csi-qingcloud-resizer
+  apiGroup: rbac.authorization.k8s.io
+---
+
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-qingcloud-node
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: node
+    owner: yunify
+    ver: v1.3.2
+spec:
+  selector:
+    matchLabels:
+      app: csi-qingcloud
+      role: node
+      owner: yunify
+      ver: v1.3.2
+  template:
+    metadata:
+      labels:
+        app: csi-qingcloud
+        role: node
+        owner: yunify
+        ver: v1.3.2
+    spec:
+      serviceAccount: csi-qingcloud-node
+      tolerations:
+        -
+          key: CriticalAddonsOnly
+          operator: Exists
+        -
+          key: dedicated
+          operator: Exists
+        -
+          effect: NoSchedule
+          key: node-role.kubernetes.io/master
+        -
+          effect: NoSchedule
+          key: node.cloudprovider.kubernetes.io/uninitialized
+          value: "true"
+      hostNetwork: true
+      containers:
+        - name: node-registrar
+          image: "csiplugin/csi-node-driver-registrar:v2.2.0"
+          resources:
+            limits:
+              memory: "20Mi"
+              cpu: "10m"
+            requests:
+              memory: "20Mi"
+              cpu: "10m"
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/disk.csi.qingcloud.com/csi.sock"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                    "/bin/sh", "-c",
+                    "rm -rf /registration/disk.csi.qingcloud.com \
+                  /registration/disk.csi.qingcloud.com-reg.sock"]
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+        - name: csi-qingcloud
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: "csiplugin/csi-qingcloud:v1.3.2"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args :
+            - "--config=/etc/config/config.yaml"
+            - "--drivername=disk.csi.qingcloud.com"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--maxvolume=9"
+            - "--nodeid=$(NODE_ID)"
+            - "--v=5"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://csi/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+              name: kubelet-dir
+            - name: socket-dir
+              mountPath: /csi
+            - name: dev-dir
+              mountPath: /dev
+              mountPropagation: "HostToContainer"
+            - name: instance-id
+              mountPath: /etc/qingcloud
+              readOnly: true
+            - name: server-config
+              mountPath: /etc/config
+      volumes:
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+        - name: socket-dir
+          hostPath:
+            path: "/var/lib/kubelet/plugins/disk.csi.qingcloud.com/"
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+        - name: dev-dir
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: instance-id
+          hostPath:
+            path: /etc/qingcloud
+        - name: server-config
+          configMap:
+            name: csi-qingcloud
+---
+
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: csi-qingcloud-controller
+  namespace: kube-system
+  labels:
+    app: csi-qingcloud
+    role: controller
+    owner: yunify
+    ver: v1.3.2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-qingcloud
+      role: controller
+      owner: yunify
+      ver: v1.3.2
+  template:
+    metadata:
+      labels:
+        app: csi-qingcloud
+        role: controller
+        owner: yunify
+        ver: v1.3.2
+    spec:
+      serviceAccount: csi-qingcloud-controller
+      containers:
+        - name: csi-provisioner
+          image: "csiplugin/csi-provisioner:v2.2.2"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election"
+            - "--feature-gates=Topology=true"
+            - "--retry-interval-max=5m"
+            - "--retry-interval-start=5s"
+            - "--timeout=90s"
+            - "--worker-threads=5"
+            - "--volume-name-prefix=pvc"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-attacher
+          image: "csiplugin/csi-attacher:v3.2.1"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election"
+            - "--retry-interval-max=5m"
+            - "--retry-interval-start=5s"
+            - "--timeout=90s"
+            - "--worker-threads=5"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: MY_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-snapshotter
+          image: "csiplugin/csi-snapshotter:v4.0.0"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election=false"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-resizer
+          image: "csiplugin/csi-resizer:v1.2.0"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-qingcloud
+          image: "csiplugin/csi-qingcloud:v1.3.2"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "100m"
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+          args :
+            - "--config=/etc/config/config.yaml"
+            - "--drivername=disk.csi.qingcloud.com"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--maxvolume=9"
+            - "--retry-detach-times-max=100"
+            - "--nodeid=$(NODE_ID)"
+            - "--v=5"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix://csi/csi.sock
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: server-config
+              mountPath: /etc/config
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        - name: server-config
+          configMap:
+            name: csi-qingcloud
+---
+
+
+apiVersion: storage.k8s.io/v1
+
+kind: CSIDriver
+metadata:
+  name: disk.csi.qingcloud.com
+spec:
+  attachRequired: true
+  podInfoOnMount: false
+  volumeLifecycleModes:
+    - Persistent

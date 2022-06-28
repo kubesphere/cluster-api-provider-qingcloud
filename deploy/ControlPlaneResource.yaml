@@ -1,0 +1,45 @@
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: qc-test-control-plane
+  namespace: default
+spec:
+  kubeadmConfigSpec:
+    initConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: qingcloud://${instance_id}
+        name: ${instance_name}
+    joinConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: qingcloud://${instance_id}
+        name: ${instance_name}
+
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: QCMachineTemplate
+      name: qc-test-control-plane
+  replicas: 1
+  version: v1.23.6
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: QCMachineTemplate
+metadata:
+  name: qc-test-control-plane
+  namespace: default
+spec:
+  template:
+    spec:
+      # It can be replaced with your need.
+      instanceType: <instanceType>
+      # It need to be replaced with your own imageID.
+      imageID: <imageID>
+      # It need to be replaced with your own sshkey.
+      sshKey: <sshKey>
