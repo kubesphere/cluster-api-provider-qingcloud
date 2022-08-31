@@ -31,6 +31,7 @@ import (
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -80,6 +81,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Fetch the Cluster.
+	// Fetch the owner Cluster of qcCluster by qcCluster.ObjectMeta.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, qcCluster.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -89,6 +91,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
+	// create QingCloud client for creating QingCloud resources.
 	qcClients, err := scope.NewQCClients(qcCluster.Spec.Zone)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -114,10 +117,12 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}()
 
 	// Handle deleted clusters
+	// If qcCluster.DeletionTimestamp is not empty, execute reconcileDelete to delete resources on QingCloud.
 	if !qcCluster.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, clusterScope)
 	}
 
+	// create infrastructure resources on QingCloud
 	return r.reconcile(ctx, clusterScope)
 }
 
@@ -156,7 +161,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		}
 	}
 
-	// create SecurityGroup
+	// create SecurityGroup on QingCloud
 	if securityGroup.ResourceID == "" && securityGroupRef.ResourceID == "" {
 		o, err := networkingsvc.CreateSecurityGroup()
 		if err != nil {
@@ -216,6 +221,57 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 			return reconcile.Result{}, err
 		}
 
+		if qccluster.Spec.KubeSphere.Enabled {
+			rules := []*qcs.SecurityGroupRule{
+				&qcs.SecurityGroupRule{
+					Action:                qcs.String("accept"),
+					Direction:             qcs.Int(0),
+					Priority:              qcs.Int(1),
+					Protocol:              qcs.String("tcp"),
+					SecurityGroupID:       securityGroupResourceID,
+					SecurityGroupRuleName: qcs.String(fmt.Sprintf("kubesphere-%s", clusterScope.Name())),
+					Val1:                  qcs.String(strconv.FormatInt(int64(30880), 10)),
+				},
+			}
+			_, err := networkingsvc.AddSecurityGroupRules(securityGroupResourceID, rules)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		
+		if qccluster.Spec.Ingress.Enabled {
+			rules_http := []*qcs.SecurityGroupRule{
+				&qcs.SecurityGroupRule{
+					Action:                qcs.String("accept"),
+					Direction:             qcs.Int(0),
+					Priority:              qcs.Int(10),
+					Protocol:              qcs.String("tcp"),
+					SecurityGroupID:       securityGroupResourceID,
+					SecurityGroupRuleName: qcs.String(fmt.Sprintf("ingress-http-%s", clusterScope.Name())),
+					Val1:                  qcs.String(strconv.FormatInt(int64(30080), 10)),
+				},
+			}
+			rules_https := []*qcs.SecurityGroupRule{
+				&qcs.SecurityGroupRule{
+					Action:                qcs.String("accept"),
+					Direction:             qcs.Int(0),
+					Priority:              qcs.Int(10),
+					Protocol:              qcs.String("tcp"),
+					SecurityGroupID:       securityGroupResourceID,
+					SecurityGroupRuleName: qcs.String(fmt.Sprintf("ingress-https-%s", clusterScope.Name())),
+					Val1:                  qcs.String(strconv.FormatInt(int64(30443), 10)),
+				},
+			}
+			_, err = networkingsvc.AddSecurityGroupRules(securityGroupResourceID, rules_http)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			_, err = networkingsvc.AddSecurityGroupRules(securityGroupResourceID, rules_https)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		
 		s, err := networkingsvc.GetSecurityGroup(securityGroupResourceID)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -246,7 +302,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	// create eip
+	// create eip on QingCloud
 	if eip.ResourceID == "" && eipRef.ResourceID == "" {
 		if eip.BillingMode == "" {
 			eip.BillingMode = networking.BillModeTraffic
@@ -267,7 +323,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		eipRef.ResourceStatus = infrav1beta1.QCResourceStatusActive
 	}
 
-	// create VxNet
+	// create VxNet on QingCloud
 	vxnetsRef := clusterScope.VxNetRef()
 	vxnet := clusterScope.VxNetsSpec()
 	vxnetID := ""
@@ -304,7 +360,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		qccluster.Status.Network.VxNetsRef = []infrav1beta1.VxNetRef{{ipnetwork, infrav1beta1.QCResourceReference{vxnetID, infrav1beta1.QCResourceStatusActive}}}
 	}
 
-	// create VPC
+	// create VPC on QingCloud
 	if vpc.ResourceID == "" && vpcRef.ResourceID == "" {
 		o, err := networkingsvc.CreateRouter(securityGroupRef.ResourceID)
 		if err != nil {
@@ -457,6 +513,27 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		}
 		eipRef.ResourceID = eip.ResourceID
 	}
+	if clusterScope.QCCluster.Spec.KubeSphere.Enabled {
+		ksConsolePort := int32(30880)
+		if err = networkingsvc.PortForwardingForEIP(strconv.FormatInt(int64(ksConsolePort), 10), loadbalancerIP, qcs.String(vpcRef.ResourceID)); err != nil {
+			klog.Error("add VPN rules for KubeSphere failed", err)
+			return reconcile.Result{}, err
+		}
+	}
+	if clusterScope.QCCluster.Spec.Ingress.Enabled {
+		ingressHTTPPort := int32(30080)
+		ingressHTTPSPort := int32(30443)
+
+		if err = networkingsvc.PortForwardingForEIP(strconv.FormatInt(int64(ingressHTTPPort), 10), loadbalancerIP, qcs.String(vpcRef.ResourceID)); err != nil {
+			klog.Error("add VPN rules for ingress http port failed", err)
+			return reconcile.Result{}, err
+		}
+		if err = networkingsvc.PortForwardingForEIP(strconv.FormatInt(int64(ingressHTTPSPort), 10), loadbalancerIP, qcs.String(vpcRef.ResourceID)); err != nil {
+			klog.Error("add VPN rules for ingress https port failed", err)
+			return reconcile.Result{}, err
+		}
+	}
+
 	// wait for vpc
 	describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
 	if err != nil {

@@ -57,6 +57,25 @@ spec:
           spec:
             description: QCClusterSpec defines the desired state of QCCluster
             properties:
+              clusterAutoScale:
+                description: ClusterAutoScale manage the cluster nodes if enabled, it will auto scale the cluster nodes.
+                properties:
+                  averageCPUUtilization:
+                    description: target average CPU utilization (represented as a percentage of requested CPU) over all the nodes; if not specified the default autoscaling policy will be used.
+                    format: int32
+                    type: integer
+                  enabled:
+                    description: Enabled clusterAutoScale, if it's not specified, default false.
+                    type: boolean
+                  maxReplicas:
+                    description: MaxReplicas is the upper limit for the number of replicas to which the clusterAutoScale can scale up. It cannot be less that minReplicas.
+                    format: int32
+                    type: integer
+                  minReplicas:
+                    description: MinReplicas is the lower limit for the number of replicas to which the clusterAutoScale can scale down.  It defaults to 1 node.  minReplicas is allowed to be 0.  Scaling is active as long as at least one metric value is available.
+                    format: int32
+                    type: integer
+                type: object
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to communicate with the control plane. If ControlPlaneDNS is unset, the QC load-balancer IP of the Kubernetes API Server is used.
                 properties:
@@ -70,6 +89,18 @@ spec:
                 required:
                 - host
                 - port
+                type: object
+              ingress:
+                description: Ingress management Ingress controller in cluster if set to true, it will auto install nginx-ingress in cluster
+                properties:
+                  enabled:
+                    type: boolean
+                type: object
+              kubesphere:
+                description: KubeSphere is a distributed operating system for cloud-native application management if set to true, it will auto install harbor in cluster
+                properties:
+                  enabled:
+                    type: boolean
                 type: object
               network:
                 description: NetworkSpec encapsulates all things related to GCP network.
@@ -122,6 +153,18 @@ spec:
                       type: object
                     type: array
                 type: object
+              repository:
+                description: Repository management image repository in cluster if set to true, it will auto install harbor in cluster
+                properties:
+                  enabled:
+                    type: boolean
+                type: object
+              storageClass:
+                description: StorageClass management storageClass in cluster if set to true, it will auto install openebs in cluster
+                properties:
+                  enabled:
+                    type: boolean
+                type: object
               zone:
                 description: The QingCloud Region the cluster lives in.
                 type: string
@@ -131,6 +174,12 @@ spec:
           status:
             description: QCClusterStatus defines the observed state of QCCluster
             properties:
+              currentReplicas:
+                description: CurrentReplicas is current number of replicas of nodes managed by this clusterAutoScaler, as last seen by the clusterAutoScaler.
+                type: integer
+              desiredReplicas:
+                description: DesiredReplicas is the desired number of replicas of nodes managed by this clusterAutoScaler, as last calculated by the clusterAutoScaler.
+                type: integer
               network:
                 description: Network encapsulates all things related to DigitalOcean network.
                 properties:
@@ -264,6 +313,25 @@ spec:
                   spec:
                     description: QCClusterSpec defines the desired state of QCCluster
                     properties:
+                      clusterAutoScale:
+                        description: ClusterAutoScale manage the cluster nodes if enabled, it will auto scale the cluster nodes.
+                        properties:
+                          averageCPUUtilization:
+                            description: target average CPU utilization (represented as a percentage of requested CPU) over all the nodes; if not specified the default autoscaling policy will be used.
+                            format: int32
+                            type: integer
+                          enabled:
+                            description: Enabled clusterAutoScale, if it's not specified, default false.
+                            type: boolean
+                          maxReplicas:
+                            description: MaxReplicas is the upper limit for the number of replicas to which the clusterAutoScale can scale up. It cannot be less that minReplicas.
+                            format: int32
+                            type: integer
+                          minReplicas:
+                            description: MinReplicas is the lower limit for the number of replicas to which the clusterAutoScale can scale down.  It defaults to 1 node.  minReplicas is allowed to be 0.  Scaling is active as long as at least one metric value is available.
+                            format: int32
+                            type: integer
+                        type: object
                       controlPlaneEndpoint:
                         description: ControlPlaneEndpoint represents the endpoint used to communicate with the control plane. If ControlPlaneDNS is unset, the QC load-balancer IP of the Kubernetes API Server is used.
                         properties:
@@ -277,6 +345,18 @@ spec:
                         required:
                         - host
                         - port
+                        type: object
+                      ingress:
+                        description: Ingress management Ingress controller in cluster if set to true, it will auto install nginx-ingress in cluster
+                        properties:
+                          enabled:
+                            type: boolean
+                        type: object
+                      kubesphere:
+                        description: KubeSphere is a distributed operating system for cloud-native application management if set to true, it will auto install harbor in cluster
+                        properties:
+                          enabled:
+                            type: boolean
                         type: object
                       network:
                         description: NetworkSpec encapsulates all things related to GCP network.
@@ -328,6 +408,18 @@ spec:
                                   type: string
                               type: object
                             type: array
+                        type: object
+                      repository:
+                        description: Repository management image repository in cluster if set to true, it will auto install harbor in cluster
+                        properties:
+                          enabled:
+                            type: boolean
+                        type: object
+                      storageClass:
+                        description: StorageClass management storageClass in cluster if set to true, it will auto install openebs in cluster
+                        properties:
+                          enabled:
+                            type: boolean
                         type: object
                       zone:
                         description: The QingCloud Region the cluster lives in.
@@ -646,6 +738,12 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machinedeployments
+  verbs:
+  - '*'
 - apiGroups:
   - cluster.x-k8s.io
   resources:
