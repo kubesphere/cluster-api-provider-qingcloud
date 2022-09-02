@@ -2,8 +2,9 @@ package networking
 
 import (
 	"fmt"
+
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
-	"github.com/pkg/errors"
+	utilerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 )
 
@@ -22,7 +23,7 @@ func (s *Service) GetLoadBalancer(lbID infrav1beta1.QCResourceID) (*qcs.Describe
 		return nil, err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o, nil
@@ -45,7 +46,7 @@ func (s *Service) CreateLoadBalancer(vxnetID infrav1beta1.QCResourceID) (infrav1
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.LoadBalancerID, nil
@@ -72,7 +73,7 @@ func (s *Service) AddLoadBalancerListener(lbID infrav1beta1.QCResourceID) (*qcs.
 		return nil, err
 	}
 	if qcs.IntValue(l.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(l.Message))
+		return nil, utilerrors.NewQingCloudError(l.RetCode, l.Message)
 	}
 
 	u, err := c.UpdateLoadBalancers(
@@ -82,7 +83,7 @@ func (s *Service) AddLoadBalancerListener(lbID infrav1beta1.QCResourceID) (*qcs.
 		return nil, err
 	}
 	if qcs.IntValue(u.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(u.Message))
+		return nil, utilerrors.NewQingCloudError(u.RetCode, u.Message)
 	}
 
 	return l, nil
@@ -108,7 +109,7 @@ func (s *Service) AddLoadBalancerBackend(lbID, lbListenerID, instanceID infrav1b
 		return err
 	}
 	if qcs.IntValue(b.RetCode) != 0 {
-		return errors.New(qcs.StringValue(b.Message))
+		return utilerrors.NewQingCloudError(b.RetCode, b.Message)
 	}
 
 	u, err := c.UpdateLoadBalancers(
@@ -118,7 +119,7 @@ func (s *Service) AddLoadBalancerBackend(lbID, lbListenerID, instanceID infrav1b
 		return err
 	}
 	if qcs.IntValue(u.RetCode) != 0 {
-		return errors.New(qcs.StringValue(u.Message))
+		return utilerrors.NewQingCloudError(u.RetCode, u.Message)
 	}
 	return nil
 }
@@ -137,7 +138,7 @@ func (s *Service) DeleteLoadBalancer(loadbalancerID infrav1beta1.QCResourceID) e
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return nil

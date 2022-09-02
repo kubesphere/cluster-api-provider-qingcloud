@@ -4,17 +4,19 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"fmt"
-	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
-	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
-	"github.com/pkg/errors"
-	qcs "github.com/yunify/qingcloud-sdk-go/service"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sigs.k8s.io/yaml"
 	"strings"
+
+	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
+	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
+	utilerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors"
+	"github.com/pkg/errors"
+	qcs "github.com/yunify/qingcloud-sdk-go/service"
+	"sigs.k8s.io/yaml"
 )
 
 // CreateInstance creates a Instance for cluster.
@@ -53,7 +55,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope) (infrav1beta1.QCReso
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.Instances[0], nil
@@ -74,7 +76,7 @@ func (s *Service) GetInstance(instanceID infrav1beta1.QCResourceID) (*qcs.Descri
 		return nil, err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o, nil
@@ -124,7 +126,7 @@ func (s *Service) UploadUserData(instanceName string, scope *scope.MachineScope)
 		return nil, err
 	}
 	if qcs.IntValue(userDataOutput.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(userDataOutput.Message))
+		return nil, utilerrors.NewQingCloudError(userDataOutput.RetCode, userDataOutput.Message)
 	}
 
 	err = os.RemoveAll(workDir)
@@ -276,7 +278,7 @@ func (s *Service) DeleteInstance(instanceID infrav1beta1.QCResourceID) error {
 		return err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 	s.scope.V(2).Info("Deleted instance", "instance-id", qcs.StringValue(instanceID))
 	return nil

@@ -2,8 +2,9 @@ package networking
 
 import (
 	"fmt"
+
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
-	"github.com/pkg/errors"
+	utilerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 )
 
@@ -25,7 +26,7 @@ func (s *Service) CreateRouter(securityGroupID string) (infrav1beta1.QCResourceI
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.Routers[0], nil
@@ -46,7 +47,7 @@ func (s *Service) GetRouter(routerID infrav1beta1.QCResourceID) (*qcs.DescribeRo
 		return nil, err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o, nil
@@ -66,7 +67,7 @@ func (s *Service) JoinRouter(routerID, vxnetID infrav1beta1.QCResourceID, ipNetw
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return err
+		return utilerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return nil
@@ -91,7 +92,7 @@ func (s *Service) UnbindingRouterVxnets(routerID infrav1beta1.QCResourceID, vxne
 		return err
 	}
 	if qcs.IntValue(l.RetCode) != 0 {
-		return errors.New(qcs.StringValue(l.Message))
+		return utilerrors.NewQingCloudError(l.RetCode, l.Message)
 	}
 
 	//a, err := c.UpdateRouters(
@@ -116,7 +117,7 @@ func (s *Service) DeleteRoute(routerID infrav1beta1.QCResourceID) error {
 		return err
 	}
 	if qcs.IntValue(d.RetCode) != 0 {
-		return errors.New(qcs.StringValue(d.Message))
+		return utilerrors.NewQingCloudError(d.RetCode, d.Message)
 	}
 	return nil
 
