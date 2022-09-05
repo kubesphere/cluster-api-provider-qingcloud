@@ -9,7 +9,9 @@ import (
 )
 
 const (
-	InternalServerErrorCode = 5000
+	CodeInternalServerError    = 5000
+	CodeResourceAlreadyExisted = 2110
+	CodeResourceNotFound       = 2100
 )
 
 func NewQingCloudError(retCode *int, message *string) *qcerrors.QingCloudError {
@@ -45,5 +47,16 @@ func IsAlreadyExisted(err error) bool {
 	if !ok {
 		return false
 	}
-	return qcErr.RetCode == InternalServerErrorCode && isAlreadyExistedErrorMessage(qcErr.Message)
+	return qcErr.RetCode == CodeResourceAlreadyExisted || (qcErr.RetCode == CodeInternalServerError && isAlreadyExistedErrorMessage(qcErr.Message))
+}
+
+func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	qcErr, ok := IsQingCloudError(err)
+	if !ok {
+		return false
+	}
+	return qcErr.RetCode == CodeResourceNotFound
 }

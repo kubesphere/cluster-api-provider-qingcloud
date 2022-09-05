@@ -251,12 +251,18 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 	computesvc := compute.NewService(ctx, clusterScope)
 	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
 	if err != nil {
-		return ctrl.Result{}, err
+		machineScope.Error(err, "get instance failed")
+		if !qcerrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if instance != nil {
 		if err := computesvc.DeleteInstance(machineScope.GetInstanceID()); err != nil {
-			return ctrl.Result{}, err
+			machineScope.Error(err, "delete instance failed")
+			if !qcerrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
 		}
 	} else {
 		clusterScope.V(2).Info("Unable to locate instance")
@@ -309,8 +315,8 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		instanceID, err = computesvc.CreateInstance(machineScope)
 		if err != nil {
 			machineScope.Error(err, "create instance failed")
-			if qcerrors.IsAlreadyExisted(err) {
-				return reconcile.Result{}, nil
+			if !qcerrors.IsAlreadyExisted(err) {
+				return reconcile.Result{}, err
 			}
 			err = errors.Errorf("Failed to create instance for QCMachine %s/%s: %v", qcMachine.Namespace, qcMachine.Name, err)
 			r.Recorder.Event(qcMachine, corev1.EventTypeWarning, "InstanceCreatingError", err.Error())
@@ -341,10 +347,9 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 			networksvc := networking.NewService(ctx, clusterScope)
 			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
 				machineScope.Error(err, "add instance to lb failed")
-				if qcerrors.IsAlreadyExisted(err) {
-					return reconcile.Result{}, nil
+				if !qcerrors.IsAlreadyExisted(err) {
+					return reconcile.Result{}, err
 				}
-				return ctrl.Result{}, err
 			}
 		}
 		machineScope.SetReady()
