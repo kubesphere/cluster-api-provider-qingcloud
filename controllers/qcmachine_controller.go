@@ -26,7 +26,7 @@ import (
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/clusterclient"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/nodes"
-	qcservererrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud/server"
+	qcerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud"
 	"github.com/pkg/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 	corev1 "k8s.io/api/core/v1"
@@ -309,7 +309,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		instanceID, err = computesvc.CreateInstance(machineScope)
 		if err != nil {
 			machineScope.Error(err, "create instance failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			err = errors.Errorf("Failed to create instance for QCMachine %s/%s: %v", qcMachine.Namespace, qcMachine.Name, err)
@@ -341,7 +341,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 			networksvc := networking.NewService(ctx, clusterScope)
 			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
 				machineScope.Error(err, "add instance to lb failed")
-				if qcservererrors.IsAlreadyExisted(err) {
+				if qcerrors.IsAlreadyExisted(err) {
 					return reconcile.Result{}, nil
 				}
 				return ctrl.Result{}, err

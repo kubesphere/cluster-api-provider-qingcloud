@@ -2,9 +2,14 @@ package qingcloud
 
 import (
 	"errors"
+	"regexp"
 
 	qcerrors "github.com/yunify/qingcloud-sdk-go/request/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
+)
+
+const (
+	InternalServerErrorCode = 5000
 )
 
 func NewQingCloudError(retCode *int, message *string) *qcerrors.QingCloudError {
@@ -24,4 +29,21 @@ func IsQingCloudError(err error) (*qcerrors.QingCloudError, bool) {
 		return qcErr, true
 	}
 	return nil, ok
+}
+
+func isAlreadyExistedErrorMessage(message string) bool {
+	pat := "\\w+ already existed"
+	reg := regexp.MustCompile(pat)
+	return reg.MatchString(message)
+}
+
+func IsAlreadyExisted(err error) bool {
+	if err == nil {
+		return false
+	}
+	qcErr, ok := IsQingCloudError(err)
+	if !ok {
+		return false
+	}
+	return qcErr.RetCode == InternalServerErrorCode && isAlreadyExistedErrorMessage(qcErr.Message)
 }

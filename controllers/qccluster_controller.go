@@ -25,7 +25,7 @@ import (
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/scope"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
-	qcservererrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud/server"
+	qcerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud"
 	"github.com/pkg/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 	corev1 "k8s.io/api/core/v1"
@@ -162,7 +162,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		o, err := networkingsvc.CreateSecurityGroup()
 		if err != nil {
 			clusterScope.Error(err, "create security group failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -182,7 +182,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		_, err = networkingsvc.AddSecurityGroupRules(o, rules)
 		if err != nil {
 			clusterScope.Error(err, "add security group rules failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -222,7 +222,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		_, err := networkingsvc.AddSecurityGroupRules(securityGroupResourceID, rules)
 		if err != nil {
 			clusterScope.Error(err, "add security group rules failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -269,7 +269,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		eipID, err := networkingsvc.CreateEIP(eip.Bandwidth, eip.BillingMode)
 		if err != nil {
 			clusterScope.Error(err, "create eip failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -307,7 +307,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		vID, err := networkingsvc.CreateVxNet()
 		if err != nil {
 			clusterScope.Error(err, "create vxnet failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -327,7 +327,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		o, err := networkingsvc.CreateRouter(securityGroupRef.ResourceID)
 		if err != nil {
 			clusterScope.Error(err, "create router failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -367,7 +367,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		// join vxnet to vpc
 		if err = networkingsvc.JoinRouter(qcs.String(vpcRef.ResourceID), qcs.String(vxnetID), ipnetwork); err != nil {
 			clusterScope.Error(err, "join router failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -393,7 +393,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		err := networkingsvc.BindEIP(qcs.String(eip.ResourceID), qcs.String(vpc.ResourceID))
 		if err != nil {
 			clusterScope.Error(err, "bind eip failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -420,7 +420,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		lbID, err := networkingsvc.CreateLoadBalancer(qcs.String(vxnetID))
 		if err != nil {
 			clusterScope.Error(err, "create loadbalancer failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -453,7 +453,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		l, err := networkingsvc.AddLoadBalancerListener(qcs.String(apiServerLoadbalancerRef.ResourceID))
 		if err != nil {
 			clusterScope.Error(err, "add loadbalancer listener failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
@@ -488,7 +488,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		err = networkingsvc.PortForwardingForEIP(strconv.FormatInt(int64(controlPlanePort), 10), loadbalancerIP, qcs.String(vpcRef.ResourceID))
 		if err != nil {
 			clusterScope.Error(err, "port forwarding for eip failed")
-			if qcservererrors.IsAlreadyExisted(err) {
+			if qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, nil
 			}
 			return reconcile.Result{}, err
