@@ -68,7 +68,7 @@ type QCClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
-	log := log.FromContext(ctx).WithValues("controlleer", "QCCluster")
+	logger := log.FromContext(ctx).WithValues("controlleer", "QCCluster")
 	//ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
 	//defer cancel()
 
@@ -86,7 +86,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 	if cluster == nil {
-		log.Info("Cluster Controller has not yet set OwnerRef")
+		logger.Info("Cluster Controller has not yet set OwnerRef")
 		return ctrl.Result{}, nil
 	}
 
@@ -99,7 +99,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
 		QCClients: *qcClients,
 		Client:    r.Client,
-		Logger:    log,
+		Logger:    logger,
 		Cluster:   cluster,
 		QCCluster: qcCluster,
 	})
@@ -169,7 +169,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		if o != nil {
 			clusterScope.Info("security group created", "id", qcs.StringValue(o))
 			rules := []*qcs.SecurityGroupRule{
-				&qcs.SecurityGroupRule{
+				{
 					Action:                qcs.String("accept"),
 					Direction:             qcs.Int(0),
 					Priority:              qcs.Int(1),
@@ -209,7 +209,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 			return reconcile.Result{}, errors.New("Value is not expected in spec.ControlPlaneEndpoint.Port. Specify the control plane port for the security group.")
 		}
 		rules := []*qcs.SecurityGroupRule{
-			&qcs.SecurityGroupRule{
+			{
 				Action:                qcs.String("accept"),
 				Direction:             qcs.Int(0),
 				Priority:              qcs.Int(1),
@@ -316,14 +316,14 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		if vID != nil {
 			clusterScope.Info("vxnet created", "id", qcs.StringValue(vID))
 			vxnetID = qcs.StringValue(vID)
-			qccluster.Spec.Network.VxNets = []infrav1beta1.QCVxNet{{vxnetID, ipnetwork}}
-			qccluster.Status.Network.VxNetsRef = []infrav1beta1.VxNetRef{{ipnetwork, infrav1beta1.QCResourceReference{vxnetID, infrav1beta1.QCResourceStatusActive}}}
+			qccluster.Spec.Network.VxNets = []infrav1beta1.QCVxNet{{ResourceID: vxnetID, IPNetwork: ipnetwork}}
+			qccluster.Status.Network.VxNetsRef = []infrav1beta1.VxNetRef{{IPNetwork: ipnetwork, ResourceRef: infrav1beta1.QCResourceReference{ResourceID: vxnetID, ResourceStatus: infrav1beta1.QCResourceStatusActive}}}
 		}
 	} else if vxnetRef.ResourceRef.ResourceID != "" || vxnetID == "" {
-		qccluster.Spec.Network.VxNets = []infrav1beta1.QCVxNet{{vxnetRef.ResourceRef.ResourceID, vxnetRef.IPNetwork}}
+		qccluster.Spec.Network.VxNets = []infrav1beta1.QCVxNet{{ResourceID: vxnetRef.ResourceRef.ResourceID, IPNetwork: vxnetRef.IPNetwork}}
 		vxnetID = vxnetRef.ResourceRef.ResourceID
 	} else {
-		qccluster.Status.Network.VxNetsRef = []infrav1beta1.VxNetRef{{ipnetwork, infrav1beta1.QCResourceReference{vxnetID, infrav1beta1.QCResourceStatusActive}}}
+		qccluster.Status.Network.VxNetsRef = []infrav1beta1.VxNetRef{{IPNetwork: ipnetwork, ResourceRef: infrav1beta1.QCResourceReference{ResourceID: vxnetID, ResourceStatus: infrav1beta1.QCResourceStatusActive}}}
 	}
 
 	// create VPC
