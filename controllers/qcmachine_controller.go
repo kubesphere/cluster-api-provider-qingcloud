@@ -26,10 +26,12 @@ import (
 	"github.com/kubesphere/cluster-api-provider-qingcloud/cloud/services/networking"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/clusterclient"
 	"github.com/kubesphere/cluster-api-provider-qingcloud/pkg/nodes"
+	qcerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud"
 	"github.com/pkg/errors"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -39,6 +41,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/predicates"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
@@ -248,12 +251,18 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 	computesvc := compute.NewService(ctx, clusterScope)
 	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
 	if err != nil {
-		return ctrl.Result{}, err
+		machineScope.Error(err, "get instance failed")
+		if !qcerrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if instance != nil {
 		if err := computesvc.DeleteInstance(machineScope.GetInstanceID()); err != nil {
-			return ctrl.Result{}, err
+			machineScope.Error(err, "delete instance failed")
+			if !qcerrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
 		}
 	} else {
 		clusterScope.V(2).Info("Unable to locate instance")
@@ -305,6 +314,10 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		}
 		instanceID, err = computesvc.CreateInstance(machineScope)
 		if err != nil {
+			machineScope.Error(err, "create instance failed")
+			if !qcerrors.IsAlreadyExisted(err) {
+				return reconcile.Result{}, err
+			}
 			err = errors.Errorf("Failed to create instance for QCMachine %s/%s: %v", qcMachine.Namespace, qcMachine.Name, err)
 			r.Recorder.Event(qcMachine, corev1.EventTypeWarning, "InstanceCreatingError", err.Error())
 			machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatusCeased)
@@ -333,8 +346,10 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		if !machineScope.QCMachine.Status.Ready && machineScope.Role() == infrav1beta1.APIServerRoleTagValue {
 			networksvc := networking.NewService(ctx, clusterScope)
 			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
-				machineScope.Info("add instance to lb failed")
-				return ctrl.Result{}, err
+				machineScope.Error(err, "add instance to lb failed")
+				if !qcerrors.IsAlreadyExisted(err) {
+					return reconcile.Result{}, err
+				}
 			}
 		}
 		machineScope.SetReady()
@@ -349,6 +364,15 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		err, custerclient := clusterclient.GetClusterClient(clusterKubeconfigSecret)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+		}
+
+		_, err = custerclient.CoreV1().Nodes().Get(context.TODO(), qcMachine.Name, metav1.GetOptions{})
+		if err != nil {
+			machineScope.Error(err, "get node failed")
+			if kubeerrors.IsNotFound(err) {
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 		}
 
 		if err = nodes.DeleteTaints(custerclient, qcMachine); err != nil {

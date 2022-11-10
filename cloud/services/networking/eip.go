@@ -2,8 +2,9 @@ package networking
 
 import (
 	"fmt"
+
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
-	"github.com/pkg/errors"
+	qcerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 )
 
@@ -30,7 +31,7 @@ func (s *Service) CreateEIP(bandWidth int, billMode string) (infrav1beta1.QCReso
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.EIPs[0], nil
@@ -48,7 +49,7 @@ func (s *Service) BindEIP(eipID, routerID infrav1beta1.QCResourceID) error {
 		return err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	a, err := c.UpdateRouters(
@@ -58,7 +59,7 @@ func (s *Service) BindEIP(eipID, routerID infrav1beta1.QCResourceID) error {
 		return err
 	}
 	if qcs.IntValue(a.RetCode) != 0 {
-		return errors.New(qcs.StringValue(a.Message))
+		return qcerrors.NewQingCloudError(a.RetCode, a.Message)
 	}
 	return nil
 }
@@ -77,7 +78,7 @@ func (s *Service) GetEIP(eipID infrav1beta1.QCResourceID) (*qcs.EIP, error) {
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.EIPSet[0], nil
@@ -102,7 +103,7 @@ func (s *Service) PortForwardingForEIP(contronPlanePort, intelIP string, routerI
 		return err
 	}
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	a, err := c.UpdateRouters(
@@ -112,7 +113,7 @@ func (s *Service) PortForwardingForEIP(contronPlanePort, intelIP string, routerI
 		return err
 	}
 	if qcs.IntValue(a.RetCode) != 0 {
-		return errors.New(qcs.StringValue(a.Message))
+		return qcerrors.NewQingCloudError(a.RetCode, a.Message)
 	}
 	return nil
 }
@@ -129,7 +130,7 @@ func (s *Service) DissociateEIP(eipID infrav1beta1.QCResourceID) error {
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return nil
@@ -147,7 +148,7 @@ func (s *Service) DeleteEIP(eipID infrav1beta1.QCResourceID) error {
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return nil

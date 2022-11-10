@@ -2,8 +2,9 @@ package networking
 
 import (
 	"fmt"
+
 	infrav1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
-	"github.com/pkg/errors"
+	qcerrors "github.com/kubesphere/cluster-api-provider-qingcloud/util/errors/qingcloud"
 	qcs "github.com/yunify/qingcloud-sdk-go/service"
 )
 
@@ -24,7 +25,7 @@ func (s *Service) CreateVxNet() (infrav1beta1.QCResourceID, error) {
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o.VxNets[0], nil
@@ -45,7 +46,7 @@ func (s *Service) GetVxNet(vxnetID infrav1beta1.QCResourceID) (*qcs.DescribeVxNe
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return nil, errors.New(qcs.StringValue(o.Message))
+		return nil, qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return o, nil
@@ -65,7 +66,7 @@ func (s *Service) DeleteVxNet(vxnetID infrav1beta1.QCResourceID) error {
 	}
 
 	if qcs.IntValue(o.RetCode) != 0 {
-		return errors.New(qcs.StringValue(o.Message))
+		return qcerrors.NewQingCloudError(o.RetCode, o.Message)
 	}
 
 	return nil
@@ -86,7 +87,7 @@ func (s *Service) LeaveRouter(routerID, vxnetID infrav1beta1.QCResourceID) error
 	}
 
 	if qcs.IntValue(l.RetCode) != 0 {
-		return errors.New(qcs.StringValue(l.Message))
+		return qcerrors.NewQingCloudError(l.RetCode, l.Message)
 	}
 
 	return nil
