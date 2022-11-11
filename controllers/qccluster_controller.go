@@ -83,6 +83,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Fetch the Cluster.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, qcCluster.ObjectMeta)
 	if err != nil {
+		logger.Error(err, "get owner cluster failed")
 		return reconcile.Result{}, err
 	}
 	if cluster == nil {
@@ -92,6 +93,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	qcClients, err := scope.NewQCClients(qcCluster.Spec.Zone)
 	if err != nil {
+		logger.Error(err, "get qc clients failed")
 		return ctrl.Result{}, err
 	}
 
@@ -104,6 +106,7 @@ func (r *QCClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		QCCluster: qcCluster,
 	})
 	if err != nil {
+		logger.Error(err, "create cluster scope failed")
 		return reconcile.Result{}, err
 	}
 
@@ -145,6 +148,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	if vpc.ResourceID != "" {
 		describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpc.ResourceID))
 		if err != nil {
+			clusterScope.Error(err, "get router failed")
 			return reconcile.Result{}, err
 		}
 
@@ -192,6 +196,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 			var s *qcs.DescribeSecurityGroupsOutput
 			s, err = networkingsvc.GetSecurityGroup(o)
 			if err != nil {
+				clusterScope.Error(err, "get security group failed")
 				return reconcile.Result{}, err
 			}
 
@@ -233,6 +238,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		var s *qcs.DescribeSecurityGroupsOutput
 		s, err = networkingsvc.GetSecurityGroup(securityGroupResourceID)
 		if err != nil {
+			clusterScope.Error(err, "get security group failed")
 			return reconcile.Result{}, err
 		}
 
@@ -247,6 +253,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for securityGroup ready
 	s, err := networkingsvc.GetSecurityGroup(qcs.String(securityGroupRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get security group failed")
 		return reconcile.Result{}, err
 	}
 
@@ -346,6 +353,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 			var g *qcs.DescribeRoutersOutput
 			g, err = networkingsvc.GetRouter(o)
 			if err != nil {
+				clusterScope.Error(err, "get router failed")
 				return reconcile.Result{}, err
 			}
 
@@ -358,6 +366,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	} else {
 		describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpc.ResourceID))
 		if err != nil {
+			clusterScope.Error(err, "get router failed")
 			return reconcile.Result{}, err
 		}
 		vpcRef.ResourceID = qcs.StringValue(describeVPCOutput.RouterSet[0].RouterID)
@@ -372,6 +381,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 
 	describeVxnetOutput, err := networkingsvc.GetVxNet(qcs.String(vxnetID))
 	if err != nil {
+		clusterScope.Error(err, "get vxnet failed")
 		return reconcile.Result{}, err
 	}
 
@@ -389,6 +399,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for vpc
 	describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get router failed")
 		return reconcile.Result{}, err
 	}
 
@@ -412,6 +423,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for vpc
 	describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get router failed")
 		return reconcile.Result{}, err
 	}
 
@@ -448,6 +460,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for loadbalancer
 	l, err := networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get load balancer failed")
 		return reconcile.Result{}, err
 	}
 	apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
@@ -479,6 +492,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for loadbalancer
 	l, err = networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get load balancer failed")
 		return reconcile.Result{}, err
 	}
 	apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
@@ -490,6 +504,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// get EIP Address
 	qcsEIP, err := networkingsvc.GetEIP(qcs.String(eip.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get eip failed")
 		return reconcile.Result{}, err
 	}
 
@@ -511,6 +526,7 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	// wait for vpc
 	describeVPCOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
 	if err != nil {
+		clusterScope.Error(err, "get router failed")
 		return reconcile.Result{}, err
 	}
 
@@ -644,6 +660,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 		var describeRoutersOutput *qcs.DescribeRoutersOutput
 		describeRoutersOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
 		if err != nil {
+			clusterScope.Error(err, "get router failed")
 			return reconcile.Result{}, err
 		}
 
