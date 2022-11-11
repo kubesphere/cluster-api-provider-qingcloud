@@ -13,10 +13,10 @@ import (
 )
 
 func DeleteTaints(client *kubernetes.Clientset, qcmachine *infrav1beta1.QCMachine) error {
-	taints := []corev1.Taint{}
-	nodeclient := client.CoreV1().Nodes()
+	var taints []corev1.Taint
+	nodeClient := client.CoreV1().Nodes()
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		node, getRrr := nodeclient.Get(context.TODO(), qcmachine.Name, metav1.GetOptions{})
+		node, getRrr := nodeClient.Get(context.TODO(), qcmachine.Name, metav1.GetOptions{})
 		if getRrr != nil {
 			return getRrr
 		}
@@ -24,14 +24,14 @@ func DeleteTaints(client *kubernetes.Clientset, qcmachine *infrav1beta1.QCMachin
 			node.Labels["topology.cluster-api-provider-qingcloud/instance-type"] = qcs.StringValue(qcmachine.Spec.InstanceType)
 			for _, taint := range node.Spec.Taints {
 				if taint.Key == "node.cloudprovider.kubernetes.io/uninitialized" {
-					break
+					continue
 				} else {
 					taints = append(taints, taint)
 				}
 			}
 			node.Spec.Taints = taints
 		}
-		_, updateErr := nodeclient.Update(context.TODO(), node, metav1.UpdateOptions{})
+		_, updateErr := nodeClient.Update(context.TODO(), node, metav1.UpdateOptions{})
 		return updateErr
 	})
 

@@ -182,24 +182,16 @@ func ConvertToUserData(data []byte, workdir, tarName string) error {
 		bootstrapScript = bootstrapScript + c
 	}
 
-	f.WriteString(bootstrapScript)
+	_, err = f.WriteString(bootstrapScript)
+	if err != nil {
+		return err
+	}
 
 	err = Tar(workdir, filepath.Join(filepath.Dir(workdir), tarName), workdir)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func getPerm(s string) os.FileMode {
-	switch s {
-	case "0640":
-		return 0640
-	case "0600":
-		return 0600
-	default:
-		return 0777
-	}
 }
 
 func Tar(src, dst, trimPrefix string) error {
@@ -230,7 +222,9 @@ func Tar(src, dst, trimPrefix string) error {
 		}
 
 		fr, err := os.Open(path)
-		defer fr.Close()
+		defer func() {
+			_ = fr.Close()
+		}()
 		if err != nil {
 			return err
 		}

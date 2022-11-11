@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrastructurev1beta1 "github.com/kubesphere/cluster-api-provider-qingcloud/api/v1beta1"
@@ -57,6 +58,9 @@ func (r *QCMachineTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager sets up the controller with the Manager.
 func (r *QCMachineTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+		}).
 		For(&infrastructurev1beta1.QCMachineTemplate{}).
 		Complete(r)
 }
