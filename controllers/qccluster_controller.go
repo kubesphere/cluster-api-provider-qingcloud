@@ -539,6 +539,7 @@ func (r *QCClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
+			RateLimiter:             defaultControllerRateLimiter,
 		}).
 		For(&infrav1beta1.QCCluster{}).
 		WithEventFilter(predicates.ResourceNotPaused(ctrl.LoggerFrom(context.TODO()))). // don't queue reconcile if resource is paused
@@ -610,7 +611,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 			if len(describeVxnetOutput.VxNetSet) != 0 && qcs.StringValue(describeVxnetOutput.VxNetSet[0].VpcRouterID) != "" {
 				if err = networkingsvc.LeaveRouter(qcs.String(vpcRef.ResourceID), qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
 					clusterScope.Error(err, "leave router failed")
-					return reconcile.Result{}, err
+					// do not return err intentionally, we want to continue anyway
 				}
 				if err = networkingsvc.DeleteVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
 					clusterScope.Error(err, "delete vxnet failed")
@@ -623,32 +624,21 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 			}
 		}
 	}
+	vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusClear
 
 	if clusterScope.GetVPCReclaimPolicy() == infrav1beta1.ReclaimDelete {
-		// delete VPC
-		if vpcRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
-			if err = networkingsvc.UnbindingRouterVxnets(qcs.String(qccluster.Status.Network.RouterRef.ResourceID), vxnetsRef); err != nil {
-				clusterScope.Error(err, "unbind router for vxnet failed")
-				vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusClear
+		if err = networkingsvc.DissociateEIP(qcs.String(qccluster.Status.Network.EIPRef.ResourceID)); err != nil {
+			clusterScope.Error(err, "dissociate eip failed")
+			// do not return err intentionally, we want to continue anyway
+		}
+		if err = networkingsvc.DeleteRouter(qcs.String(vpcRef.ResourceID)); err != nil {
+			clusterScope.Error(err, "delete router failed")
+			if !qcerrors.IsNotFound(err) {
+				vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 				return reconcile.Result{}, err
 			}
-			vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusClear
 		}
-
-		if vpcRef.ResourceStatus == infrav1beta1.QCResourceStatusClear {
-			if err = networkingsvc.DissociateEIP(qcs.String(qccluster.Status.Network.EIPRef.ResourceID)); err != nil {
-				clusterScope.Error(err, "dissociate eip failed")
-				return reconcile.Result{}, err
-			}
-			if err = networkingsvc.DeleteRoute(qcs.String(vpcRef.ResourceID)); err != nil {
-				clusterScope.Error(err, "delete route failed")
-				if !qcerrors.IsNotFound(err) {
-					vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-					return reconcile.Result{}, err
-				}
-			}
-			vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-		}
+		vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 
 		// wait for vpc
 		var describeRoutersOutput *qcs.DescribeRoutersOutput

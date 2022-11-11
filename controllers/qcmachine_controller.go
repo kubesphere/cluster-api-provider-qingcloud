@@ -176,6 +176,7 @@ func (r *QCMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 5,
+			RateLimiter:             defaultControllerRateLimiter,
 		}).
 		For(&infrav1beta1.QCMachine{}).
 		WithEventFilter(predicates.ResourceNotPaused(ctrl.LoggerFrom(context.TODO()))).
