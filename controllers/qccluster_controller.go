@@ -586,7 +586,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 	if apiServerLoadbalancerRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
 		if err := networkingsvc.DeleteLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID)); err != nil {
 			clusterScope.Error(err, "delete load balancer failed")
-			if !qcerrors.IsNotFound(err) {
+			if !qcerrors.IsNotFoundOrDeleted(err) {
 				apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 				return reconcile.Result{}, err
 			}
@@ -598,7 +598,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 	l, err := networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
 	if err != nil {
 		clusterScope.Error(err, "get load balancer failed")
-		if !qcerrors.IsNotFound(err) {
+		if !qcerrors.IsNotFoundOrDeleted(err) {
 			return reconcile.Result{}, err
 		}
 	}
@@ -618,7 +618,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 			describeVxnetOutput, err = networkingsvc.GetVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID))
 			if err != nil {
 				clusterScope.Error(err, "get vxnet failed")
-				if qcerrors.IsNotFound(err) {
+				if qcerrors.IsNotFoundOrDeleted(err) {
 					continue
 				}
 				return reconcile.Result{}, err
@@ -631,7 +631,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 				}
 				if err = networkingsvc.DeleteVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
 					clusterScope.Error(err, "delete vxnet failed")
-					if !qcerrors.IsNotFound(err) {
+					if !qcerrors.IsNotFoundOrDeleted(err) {
 						return reconcile.Result{}, err
 					}
 				}
@@ -649,7 +649,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 		}
 		if err = networkingsvc.DeleteRouter(qcs.String(vpcRef.ResourceID)); err != nil {
 			clusterScope.Error(err, "delete router failed")
-			if !qcerrors.IsNotFound(err) {
+			if !qcerrors.IsNotFoundOrDeleted(err) {
 				vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 				return reconcile.Result{}, err
 			}
@@ -675,7 +675,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 		if eipRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
 			if err = networkingsvc.DeleteEIP(qcs.String(eipRef.ResourceID)); err != nil {
 				clusterScope.Error(err, "delete eip failed")
-				if !qcerrors.IsNotFound(err) {
+				if !qcerrors.IsNotFoundOrDeleted(err) {
 					return reconcile.Result{}, err
 				}
 			}
@@ -687,7 +687,7 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 		if securityGroupRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
 			if err = networkingsvc.DeleteSecurityGroup(qcs.String(securityGroupRef.ResourceID)); err != nil {
 				clusterScope.Error(err, "delete security group failed")
-				if !qcerrors.IsNotFound(err) {
+				if !qcerrors.IsNotFoundOrDeleted(err) {
 					return reconcile.Result{}, err
 				}
 			}

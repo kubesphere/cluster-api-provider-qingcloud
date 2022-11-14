@@ -263,7 +263,7 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
 	if err != nil {
 		machineScope.Error(err, "get instance failed")
-		if !qcerrors.IsNotFound(err) {
+		if !qcerrors.IsNotFoundOrDeleted(err) {
 			return ctrl.Result{}, err
 		}
 	}
@@ -271,7 +271,7 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 	if instance != nil {
 		if err = computesvc.DeleteInstance(machineScope.GetInstanceID()); err != nil {
 			machineScope.Error(err, "delete instance failed")
-			if !qcerrors.IsNotFound(err) {
+			if !qcerrors.IsNotFoundOrDeleted(err) {
 				return ctrl.Result{}, err
 			}
 		}
@@ -311,12 +311,12 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 	}
 
 	computesvc := compute.NewService(ctx, clusterScope)
-	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
+	instanceID := machineScope.GetInstanceID()
+	instance, err := computesvc.GetInstance(instanceID)
 	if err != nil {
 		machineScope.Error(err, "get instance failed")
 		return ctrl.Result{}, err
 	}
-	instanceID := machineScope.GetInstanceID()
 	if instance == nil {
 		if machineScope.QCMachine.Spec.SSHKeyID == nil {
 			err = errors.Errorf("Not found SSHKeyID")
@@ -341,11 +341,8 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 			return ctrl.Result{}, err
 		}
 	}
-	//machineScope.SetProviderID(qcs.StringValue(instanceID))
 	machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatus(qcs.StringValue(instance.InstanceSet[0].Status)))
-
 	instanceState := *machineScope.GetInstanceStatus()
-
 	switch instanceState {
 	case infrav1beta1.QCResourceStatusPending:
 		machineScope.Info("QCMachine instance is pending", "instance-id", *machineScope.GetInstanceID())
