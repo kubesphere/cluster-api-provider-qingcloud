@@ -108,7 +108,7 @@ func (s *Service) UnbindingRouterVxnets(routerID infrav1beta1.QCResourceID, vxne
 
 }
 
-func (s *Service) DeleteRoute(routerID infrav1beta1.QCResourceID) error {
+func (s *Service) DeleteRouter(routerID infrav1beta1.QCResourceID) error {
 	c := s.scope.Router
 	d, err := c.DeleteRouters(
 		&qcs.DeleteRoutersInput{Routers: []*string{routerID}},

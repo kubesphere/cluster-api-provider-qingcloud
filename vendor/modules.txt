@@ -581,7 +581,6 @@ sigs.k8s.io/cluster-api/util/conditions
 sigs.k8s.io/cluster-api/util/labels
 sigs.k8s.io/cluster-api/util/patch
 sigs.k8s.io/cluster-api/util/predicates
-sigs.k8s.io/cluster-api/util/record
 sigs.k8s.io/cluster-api/util/version
 # sigs.k8s.io/controller-runtime v0.11.1
 ## explicit; go 1.17

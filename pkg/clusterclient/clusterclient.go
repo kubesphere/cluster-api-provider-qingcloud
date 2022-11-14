@@ -21,5 +21,5 @@ func GetClusterClient(secret *corev1.Secret) (error, *kubernetes.Clientset) {
 		return err, nil
 	}
 	clientsetForCluster, err := kubernetes.NewForConfig(restConfig)
-	return nil, clientsetForCluster
+	return err, clientsetForCluster
 }

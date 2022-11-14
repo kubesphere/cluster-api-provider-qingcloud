@@ -18,11 +18,13 @@ package main
 
 import (
 	"flag"
-	"github.com/kubesphere/cluster-api-provider-qingcloud/util/reconciler"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"os"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"time"
+
+	"github.com/kubesphere/cluster-api-provider-qingcloud/util/reconciler"
+	"go.uber.org/zap/zapcore"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -66,6 +68,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.RFC3339TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

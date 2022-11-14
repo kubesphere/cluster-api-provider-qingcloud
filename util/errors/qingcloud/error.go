@@ -1,7 +1,6 @@
 package qingcloud
 
 import (
-	"errors"
 	"regexp"
 
 	qcerrors "github.com/yunify/qingcloud-sdk-go/request/errors"
@@ -25,8 +24,7 @@ func IsQingCloudError(err error) (*qcerrors.QingCloudError, bool) {
 	if err == nil {
 		return nil, false
 	}
-	qcErr := &qcerrors.QingCloudError{}
-	ok := errors.As(err, qcErr)
+	qcErr, ok := err.(*qcerrors.QingCloudError)
 	if ok {
 		return qcErr, true
 	}
@@ -34,7 +32,7 @@ func IsQingCloudError(err error) (*qcerrors.QingCloudError, bool) {
 }
 
 func isAlreadyExistedErrorMessage(message string) bool {
-	pat := "\\w+ already existed"
+	pat := ".+ already existed"
 	reg := regexp.MustCompile(pat)
 	return reg.MatchString(message)
 }
@@ -50,6 +48,23 @@ func IsAlreadyExisted(err error) bool {
 	return qcErr.RetCode == CodeResourceAlreadyExisted || (qcErr.RetCode == CodeInternalServerError && isAlreadyExistedErrorMessage(qcErr.Message))
 }
 
+func isDeletedErrorMessage(message string) bool {
+	pat := ".+ has already been deleted"
+	reg := regexp.MustCompile(pat)
+	return reg.MatchString(message)
+}
+
+func IsDeleted(err error) bool {
+	if err == nil {
+		return false
+	}
+	qcErr, ok := IsQingCloudError(err)
+	if !ok {
+		return false
+	}
+	return isDeletedErrorMessage(qcErr.Message)
+}
+
 func IsNotFound(err error) bool {
 	if err == nil {
 		return false
@@ -59,4 +74,8 @@ func IsNotFound(err error) bool {
 		return false
 	}
 	return qcErr.RetCode == CodeResourceNotFound
+}
+
+func IsNotFoundOrDeleted(err error) bool {
+	return IsNotFound(err) || IsDeleted(err)
 }

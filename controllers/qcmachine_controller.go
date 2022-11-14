@@ -33,12 +33,14 @@ import (
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/predicates"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -79,11 +81,12 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	//ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
 	//defer cancel()
 
-	log := ctrl.LoggerFrom(ctx)
+	log := ctrl.LoggerFrom(ctx).WithName(req.NamespacedName.String())
 
 	qcMachine := &infrav1beta1.QCMachine{}
 
 	if err := r.Get(ctx, req.NamespacedName, qcMachine); err != nil {
+		log.Error(err, "get qc machine failed")
 		if kubeerrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -93,6 +96,7 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, qcMachine.ObjectMeta)
 	if err != nil {
+		log.Error(err, "get owner machine failed")
 		return ctrl.Result{}, err
 	}
 	if machine == nil {
@@ -103,8 +107,8 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		log.Info("Machine is missing cluster label or cluster does not exist")
-		return ctrl.Result{}, nil
+		log.Error(err, "get cluster failed")
+		return ctrl.Result{}, err
 	}
 
 	qcCluster := &infrav1beta1.QCCluster{}
@@ -113,9 +117,9 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
 
-	if err := r.Get(ctx, qcClusternamespacedName, qcCluster); err != nil {
-		log.Info("QCCluster is not available yet")
-		return ctrl.Result{}, nil
+	if err = r.Get(ctx, qcClusternamespacedName, qcCluster); err != nil {
+		log.Error(err, "get qc cluster failed")
+		return ctrl.Result{}, err
 	}
 
 	// Return early if the object or Cluster is paused.
@@ -126,6 +130,7 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	qcClients, err := scope.NewQCClients(qcCluster.Spec.Zone)
 	if err != nil {
+		log.Error(err, "get qc clients failed")
 		return ctrl.Result{}, err
 	}
 
@@ -138,6 +143,7 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		QCCluster: qcCluster,
 	})
 	if err != nil {
+		log.Error(err, "get cluster scope failed")
 		return ctrl.Result{}, err
 	}
 
@@ -152,12 +158,13 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		QCMachine: qcMachine,
 	})
 	if err != nil {
-		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
+		log.Error(err, "get machine scope failed")
+		return ctrl.Result{}, err
 	}
 
 	// Always close the scope when exiting this function so we can persist any QCMachine changes.
 	defer func() {
-		if err := machineScope.Close(); err != nil && reterr == nil {
+		if err = machineScope.Close(); err != nil && reterr == nil {
 			reterr = err
 		}
 	}()
@@ -173,6 +180,10 @@ func (r *QCMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // SetupWithManager sets up the controller with the Manager.
 func (r *QCMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 5,
+			RateLimiter:             defaultControllerRateLimiter,
+		}).
 		For(&infrav1beta1.QCMachine{}).
 		WithEventFilter(predicates.ResourceNotPaused(ctrl.LoggerFrom(context.TODO()))).
 		Watches(
@@ -250,19 +261,16 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 
 	computesvc := compute.NewService(ctx, clusterScope)
 	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
-	if err != nil {
+	if err != nil && !qcerrors.IsNotFoundOrDeleted(err) {
 		machineScope.Error(err, "get instance failed")
-		if !qcerrors.IsNotFound(err) {
-			return ctrl.Result{}, err
-		}
+		return ctrl.Result{}, err
 	}
 
 	if instance != nil {
-		if err := computesvc.DeleteInstance(machineScope.GetInstanceID()); err != nil {
+		err = computesvc.DeleteInstance(machineScope.GetInstanceID())
+		if err != nil && !qcerrors.IsNotFoundOrDeleted(err) {
 			machineScope.Error(err, "delete instance failed")
-			if !qcerrors.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
+			return ctrl.Result{}, err
 		}
 	} else {
 		clusterScope.V(2).Info("Unable to locate instance")
@@ -281,7 +289,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 
 	// If the QCMachine is in an error state, return early.
 	if qcMachine.Status.FailureReason != nil || qcMachine.Status.FailureMessage != nil {
-		machineScope.Info("Error state detected, skipping reconciliation")
+		machineScope.Info("Error state detected, skipping reconcile")
 		return ctrl.Result{}, nil
 	}
 
@@ -300,14 +308,16 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 	}
 
 	computesvc := compute.NewService(ctx, clusterScope)
-	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
+	instanceID := machineScope.GetInstanceID()
+	instance, err := computesvc.GetInstance(instanceID)
 	if err != nil {
+		machineScope.Error(err, "get instance failed")
 		return ctrl.Result{}, err
 	}
-	instanceID := machineScope.GetInstanceID()
 	if instance == nil {
 		if machineScope.QCMachine.Spec.SSHKeyID == nil {
 			err = errors.Errorf("Not found SSHKeyID")
+			machineScope.Error(err, "SSHKeyID not set in spec")
 			r.Recorder.Event(qcMachine, corev1.EventTypeWarning, "NotFoundSSHKeyID", err.Error())
 			machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatusPending)
 			return ctrl.Result{}, err
@@ -315,9 +325,6 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		instanceID, err = computesvc.CreateInstance(machineScope)
 		if err != nil {
 			machineScope.Error(err, "create instance failed")
-			if !qcerrors.IsAlreadyExisted(err) {
-				return reconcile.Result{}, err
-			}
 			err = errors.Errorf("Failed to create instance for QCMachine %s/%s: %v", qcMachine.Namespace, qcMachine.Name, err)
 			r.Recorder.Event(qcMachine, corev1.EventTypeWarning, "InstanceCreatingError", err.Error())
 			machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatusCeased)
@@ -327,14 +334,12 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		r.Recorder.Eventf(qcMachine, corev1.EventTypeNormal, "InstanceCreated", "Created new instance - %s", qcMachine.Name)
 		instance, err = computesvc.GetInstance(instanceID)
 		if err != nil {
+			machineScope.Error(err, "get instance failed")
 			return ctrl.Result{}, err
 		}
 	}
-	//machineScope.SetProviderID(qcs.StringValue(instanceID))
 	machineScope.SetInstanceStatus(infrav1beta1.QCResourceStatus(qcs.StringValue(instance.InstanceSet[0].Status)))
-
 	instanceState := *machineScope.GetInstanceStatus()
-
 	switch instanceState {
 	case infrav1beta1.QCResourceStatusPending:
 		machineScope.Info("QCMachine instance is pending", "instance-id", *machineScope.GetInstanceID())
@@ -345,7 +350,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		r.Recorder.Eventf(qcMachine, corev1.EventTypeNormal, "QCMachine instance is running", "QCMachine %s - has ready status", *machineScope.GetInstanceID())
 		if !machineScope.QCMachine.Status.Ready && machineScope.Role() == infrav1beta1.APIServerRoleTagValue {
 			networksvc := networking.NewService(ctx, clusterScope)
-			if err := networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
+			if err = networksvc.AddLoadBalancerBackend(qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersRef.ResourceID), qcs.String(clusterScope.QCCluster.Status.Network.APIServerLoadbalancersListenerRef.ResourceID), instanceID); err != nil {
 				machineScope.Error(err, "add instance to lb failed")
 				if !qcerrors.IsAlreadyExisted(err) {
 					return reconcile.Result{}, err
@@ -354,35 +359,34 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 		}
 		machineScope.SetReady()
 
-		machineScope.Info("update cluster nodes taints", "node name", qcMachine.Name)
 		clusterKubeconfigSecret := &corev1.Secret{}
 		clusterKubeconfigSecretKey := types.NamespacedName{Namespace: clusterScope.Cluster.Namespace, Name: clusterScope.Cluster.Name + "-kubeconfig"}
-		if err := r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
+		if err = r.Client.Get(context.TODO(), clusterKubeconfigSecretKey, clusterKubeconfigSecret); err != nil {
 			machineScope.Error(err, fmt.Sprintf("get secret %s failed", clusterScope.Cluster.Name+"-kubeconfig"))
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+			return ctrl.Result{}, err
 		}
-		err, custerclient := clusterclient.GetClusterClient(clusterKubeconfigSecret)
+		var clusterClient *kubernetes.Clientset
+		err, clusterClient = clusterclient.GetClusterClient(clusterKubeconfigSecret)
 		if err != nil {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+			machineScope.Error(err, "get cluster client failed")
+			return ctrl.Result{}, err
 		}
 
-		_, err = custerclient.CoreV1().Nodes().Get(context.TODO(), qcMachine.Name, metav1.GetOptions{})
+		_, err = clusterClient.CoreV1().Nodes().Get(context.TODO(), qcMachine.Name, metav1.GetOptions{})
 		if err != nil {
 			machineScope.Error(err, "get node failed")
-			if kubeerrors.IsNotFound(err) {
-				return ctrl.Result{}, nil
-			}
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+			return ctrl.Result{}, err
 		}
 
-		if err = nodes.DeleteTaints(custerclient, qcMachine); err != nil {
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		if err = nodes.DeleteTaints(clusterClient, qcMachine); err != nil {
+			machineScope.Error(err, "delete taints for node failed")
+			return ctrl.Result{}, err
 		}
 
 		return ctrl.Result{}, nil
 	default:
 		machineScope.SetFailureReason(capierrors.UpdateMachineError)
 		machineScope.SetFailureMessage(errors.Errorf("QCMachine instance state %s is unexpected", instanceState))
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{}, errors.Errorf("unexpected instance state: %v", instanceState)
 	}
 }
