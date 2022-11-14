@@ -261,19 +261,16 @@ func (r *QCMachineReconciler) reconcileDelete(ctx context.Context, machineScope 
 
 	computesvc := compute.NewService(ctx, clusterScope)
 	instance, err := computesvc.GetInstance(machineScope.GetInstanceID())
-	if err != nil {
+	if err != nil && !qcerrors.IsNotFoundOrDeleted(err) {
 		machineScope.Error(err, "get instance failed")
-		if !qcerrors.IsNotFoundOrDeleted(err) {
-			return ctrl.Result{}, err
-		}
+		return ctrl.Result{}, err
 	}
 
 	if instance != nil {
-		if err = computesvc.DeleteInstance(machineScope.GetInstanceID()); err != nil {
+		err = computesvc.DeleteInstance(machineScope.GetInstanceID())
+		if err != nil && !qcerrors.IsNotFoundOrDeleted(err) {
 			machineScope.Error(err, "delete instance failed")
-			if !qcerrors.IsNotFoundOrDeleted(err) {
-				return ctrl.Result{}, err
-			}
+			return ctrl.Result{}, err
 		}
 	} else {
 		clusterScope.V(2).Info("Unable to locate instance")
@@ -346,7 +343,7 @@ func (r *QCMachineReconciler) reconcile(ctx context.Context, machineScope *scope
 	switch instanceState {
 	case infrav1beta1.QCResourceStatusPending:
 		machineScope.Info("QCMachine instance is pending", "instance-id", *machineScope.GetInstanceID())
-		return ctrl.Result{}, errors.New("instance is in pending state")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	case infrav1beta1.QCResourceStatusRunning:
 		machineScope.Info("QCMachine instance is running", "instance-id", *machineScope.GetInstanceID())
 		r.Recorder.Eventf(qcMachine, corev1.EventTypeNormal, "QCMachine instance is running", "QCMachine instance is running - instance-id: %s", *machineScope.GetInstanceID())

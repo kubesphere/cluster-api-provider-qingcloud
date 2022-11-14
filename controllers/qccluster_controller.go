@@ -375,8 +375,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 
 	// wait for vpc
 	if vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("vpc not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected vpc status: %v", vpcRef.ResourceStatus)
+		clusterScope.Info("vpc not ready", "vpc status", vpcRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	describeVxnetOutput, err := networkingsvc.GetVxNet(qcs.String(vxnetID))
@@ -405,8 +405,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 
 	vpcRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(describeVPCOutput.RouterSet[0].Status))
 	if vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("vpc not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected vpc status: %v", vpcRef.ResourceStatus)
+		clusterScope.Info("vpc not ready", "vpc status", vpcRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// join EIP to vpc
@@ -429,8 +429,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 
 	vpcRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(describeVPCOutput.RouterSet[0].Status))
 	if vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("vpc not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected vpc status: %v", vpcRef.ResourceStatus)
+		clusterScope.Info("vpc not ready", "vpc status", vpcRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// create loadbalancer
@@ -465,8 +465,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	}
 	apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
 	if apiServerLoadbalancerRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("loadbalancer not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected api server load balancer status: %v", apiServerLoadbalancerRef.ResourceStatus)
+		clusterScope.Info("load balancer not ready", "load balancer status", apiServerLoadbalancerRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	loadbalancerIP = qcs.StringValueSlice(l.LoadBalancerSet[0].PrivateIPs)[0]
@@ -477,13 +477,13 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 		var lbl *qcs.AddLoadBalancerListenersOutput
 		lbl, err = networkingsvc.AddLoadBalancerListener(qcs.String(apiServerLoadbalancerRef.ResourceID))
 		if err != nil {
-			clusterScope.Error(err, "add loadbalancer listener failed")
+			clusterScope.Error(err, "add load balancer listener failed")
 			if !qcerrors.IsAlreadyExisted(err) {
 				return reconcile.Result{}, err
 			}
 		}
 		if lbl != nil {
-			clusterScope.Info("loadbalancer listener added", "name", lbl.LoadBalancerListeners[0])
+			clusterScope.Info("load balancer listener added", "name", lbl.LoadBalancerListeners[0])
 			apiServerLoadbalancerListenRef.ResourceID = qcs.StringValue(lbl.LoadBalancerListeners[0])
 			apiServerLoadbalancerListenRef.ResourceStatus = infrav1beta1.QCResourceStatusActive
 		}
@@ -497,8 +497,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 	}
 	apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
 	if apiServerLoadbalancerRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("loadbalancer not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected api server load balancer status: %v", apiServerLoadbalancerRef.ResourceStatus)
+		clusterScope.Info("load balancer not ready", "load balancer status", apiServerLoadbalancerRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// get EIP Address
@@ -532,8 +532,8 @@ func (r *QCClusterReconciler) reconcile(ctx context.Context, clusterScope *scope
 
 	vpcRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(describeVPCOutput.RouterSet[0].Status))
 	if vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusActive {
-		clusterScope.Info("vpc not ready")
-		return reconcile.Result{}, errors.Errorf("unexpected vpc status: %v", vpcRef.ResourceStatus)
+		clusterScope.Info("vpc not ready", "vpc status", vpcRef.ResourceStatus)
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// set cluster control plane endpoint
@@ -580,33 +580,17 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 	qccluster := clusterScope.QCCluster
 	networkingsvc := networking.NewService(ctx, clusterScope)
 	vpcRef := clusterScope.RouterRef()
+	var err error
 
 	// delete loadbalancer
 	apiServerLoadbalancerRef := clusterScope.APIServerLoadbalancerRef()
 	if apiServerLoadbalancerRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
-		if err := networkingsvc.DeleteLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID)); err != nil {
+		err = networkingsvc.DeleteLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
+		if err == nil || qcerrors.IsNotFoundOrDeleted(err) {
+			apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
+		} else {
 			clusterScope.Error(err, "delete load balancer failed")
-			if !qcerrors.IsNotFoundOrDeleted(err) {
-				apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-				return reconcile.Result{}, err
-			}
-		}
-		apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-	}
-
-	// wait for loadbalancer
-	l, err := networkingsvc.GetLoadBalancer(qcs.String(apiServerLoadbalancerRef.ResourceID))
-	if err != nil {
-		clusterScope.Error(err, "get load balancer failed")
-		if !qcerrors.IsNotFoundOrDeleted(err) {
 			return reconcile.Result{}, err
-		}
-	}
-	if l != nil {
-		apiServerLoadbalancerRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(l.LoadBalancerSet[0].Status))
-		if apiServerLoadbalancerRef.ResourceStatus != infrav1beta1.QCResourceStatusDeleted && apiServerLoadbalancerRef.ResourceStatus != infrav1beta1.QCResourceStatusCeased {
-			clusterScope.Info("loadbalancer is not being deleted")
-			return reconcile.Result{}, errors.Errorf("unexpected api server load balancer status: %v", apiServerLoadbalancerRef.ResourceStatus)
 		}
 	}
 
@@ -617,10 +601,10 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 			var describeVxnetOutput *qcs.DescribeVxNetsOutput
 			describeVxnetOutput, err = networkingsvc.GetVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID))
 			if err != nil {
-				clusterScope.Error(err, "get vxnet failed")
 				if qcerrors.IsNotFoundOrDeleted(err) {
 					continue
 				}
+				clusterScope.Error(err, "get vxnet failed")
 				return reconcile.Result{}, err
 			}
 
@@ -629,14 +613,13 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 					clusterScope.Error(err, "leave router failed")
 					// do not return err intentionally, we want to continue anyway
 				}
-				if err = networkingsvc.DeleteVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID)); err != nil {
+				err = networkingsvc.DeleteVxNet(qcs.String(vxnetRef.ResourceRef.ResourceID))
+				if err == nil || qcerrors.IsNotFoundOrDeleted(err) {
+					qccluster.Status.Network.VxNetsRef[index].ResourceRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
+				} else {
 					clusterScope.Error(err, "delete vxnet failed")
-					if !qcerrors.IsNotFoundOrDeleted(err) {
-						return reconcile.Result{}, err
-					}
+					return reconcile.Result{}, err
 				}
-
-				qccluster.Status.Network.VxNetsRef[index].ResourceRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
 			}
 		}
 	}
@@ -647,51 +630,36 @@ func (r *QCClusterReconciler) reconcileDelete(ctx context.Context, clusterScope 
 			clusterScope.Error(err, "dissociate eip failed")
 			// do not return err intentionally, we want to continue anyway
 		}
-		if err = networkingsvc.DeleteRouter(qcs.String(vpcRef.ResourceID)); err != nil {
+		err = networkingsvc.DeleteRouter(qcs.String(vpcRef.ResourceID))
+		if err == nil || qcerrors.IsNotFoundOrDeleted(err) {
+			vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
+		} else {
 			clusterScope.Error(err, "delete router failed")
-			if !qcerrors.IsNotFoundOrDeleted(err) {
-				vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-				return reconcile.Result{}, err
-			}
-		}
-		vpcRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
-
-		// wait for vpc
-		var describeRoutersOutput *qcs.DescribeRoutersOutput
-		describeRoutersOutput, err = networkingsvc.GetRouter(qcs.String(vpcRef.ResourceID))
-		if err != nil {
-			clusterScope.Error(err, "get router failed")
 			return reconcile.Result{}, err
-		}
-
-		vpcRef.ResourceStatus = infrav1beta1.QCResourceStatus(qcs.StringValue(describeRoutersOutput.RouterSet[0].Status))
-		if vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusDeleted && vpcRef.ResourceStatus != infrav1beta1.QCResourceStatusCeased {
-			clusterScope.Info("vpc is not being deleted")
-			return reconcile.Result{}, errors.Errorf("unexpected vpc status: %v", vpcRef.ResourceStatus)
 		}
 
 		// delete EIP
 		eipRef := clusterScope.EIPRef()
 		if eipRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
-			if err = networkingsvc.DeleteEIP(qcs.String(eipRef.ResourceID)); err != nil {
+			err = networkingsvc.DeleteEIP(qcs.String(eipRef.ResourceID))
+			if err == nil || qcerrors.IsNotFoundOrDeleted(err) {
+				eipRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
+			} else {
 				clusterScope.Error(err, "delete eip failed")
-				if !qcerrors.IsNotFoundOrDeleted(err) {
-					return reconcile.Result{}, err
-				}
+				return reconcile.Result{}, err
 			}
-			eipRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 		}
 
 		// delete SecurityGroup
 		securityGroupRef := clusterScope.SecurityGroupRef()
 		if securityGroupRef.ResourceStatus == infrav1beta1.QCResourceStatusActive {
-			if err = networkingsvc.DeleteSecurityGroup(qcs.String(securityGroupRef.ResourceID)); err != nil {
+			err = networkingsvc.DeleteSecurityGroup(qcs.String(securityGroupRef.ResourceID))
+			if err == nil || qcerrors.IsNotFoundOrDeleted(err) {
+				securityGroupRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleted
+			} else {
 				clusterScope.Error(err, "delete security group failed")
-				if !qcerrors.IsNotFoundOrDeleted(err) {
-					return reconcile.Result{}, err
-				}
+				return reconcile.Result{}, err
 			}
-			securityGroupRef.ResourceStatus = infrav1beta1.QCResourceStatusDeleteing
 		}
 	}
 	controllerutil.RemoveFinalizer(qccluster, infrav1beta1.ClusterFinalizer)
